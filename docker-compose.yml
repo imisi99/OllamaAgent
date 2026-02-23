@@ -1,6 +1,6 @@
 services:
   qdrant:
-    images: qdrant/qdrant:v1.16.3
+    image: qdrant/qdrant:v1.16.3
     container_name: agent_qdrant
     restart: always
     ports:
@@ -20,6 +20,26 @@ services:
       timeout: 3s
       retries: 3
       start_period: 10s
+    networks:
+      - agent-shared-network
+  mongo:
+    image: mongo:8.2.6-rc0
+    container_name: agent_mongo
+    restart: always
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - agent-shared-network
+  redis:
+    image: redis:8.2.3
+    container_name: agent_redis
+    restart: always
+    ports:
+      - ""
+    volumes:
+      - ""
     networks:
       - agent-shared-network
 
