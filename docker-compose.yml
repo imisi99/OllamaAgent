@@ -37,9 +37,9 @@ services:
     container_name: agent_redis
     restart: always
     ports:
-      - ""
+      - "6379:6379"
     volumes:
-      - ""
+      - redis_data:/redis/storage
     networks:
       - agent-shared-network
 
