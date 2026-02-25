@@ -20,4 +20,6 @@ class Message(EmbeddedDocument):
 class Session(Document):
     session_name = StringField(unique=True, required=True)
     created_at = DateTimeField(default=datetime.now())
-    messages = ListField(EmbeddedDocumentField(Message))
+    messages = ListField(EmbeddedDocumentField(Message))  # type: ignore
+
+    meta = {"collection": "sessions"}
