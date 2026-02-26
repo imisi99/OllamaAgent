@@ -1,3 +1,3 @@
 import streamlit as st
 
-st.write("Some stuff")
+st.header(":violet[Ollama] :red[_Agent_]", divider="grey")
