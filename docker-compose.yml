@@ -6,6 +6,8 @@ services:
     ports:
       - "6333:6333"
       - "6334:6334"
+    environment:
+      - QDRANT__SERVICE__API_KEY=${QDRANT_API_KEY}
     volumes:
       - qdrant:/qdrant/storage
     healthcheck:
@@ -28,21 +30,64 @@ services:
     restart: always
     ports:
       - "27017:27017"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_USERNAME}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_PASSWORD}
     volumes:
-      - mongodb_data:/data/db
+      - mongodb-data:/data/db
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mongosh",
+          "--eval",
+          "db.adminCommand('ping')",
+          "--username",
+          "${MONGO_USERNAME}",
+          "--password",
+          "${MONGO_PASSWORD}",
+          "--authenticationDatabase",
+          "admin",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 2
+      start_period: 15s
     networks:
       - agent-shared-network
   redis:
     image: redis:8.2.3
     container_name: agent_redis
     restart: always
+    command:
+      [
+        "redis-server",
+        "--appendonly",
+        "yes",
+        "--requirepass",
+        "${REDIS_PASS}",
+        "--maxmemory",
+        "50mb",
+        "--maxmemory-policy",
+        "volatile-ttl",
+      ]
     ports:
       - "6379:6379"
     volumes:
-      - redis_data:/redis/storage
+      - redis-data:/redis/storage
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
     networks:
       - agent-shared-network
 
 networks:
   agent-shared-network:
-    - external: true
+    external: true
+
+volumes:
+  qdrant:
+  mongodb-data:
+  redis-data:

@@ -16,14 +16,14 @@ def connect_qdrant() -> QdrantClient:
     return client
 
 
-def ensure_collections(client: QdrantClient):
-    collections = client.get_collections().collections
+def ensure_collections():
+    collections = get_qdrant_client().get_collections().collections
     existing = {c.name for c in collections}
 
     if "projects" not in existing:
         logging.info("[QDRANT] Creating the projects collection  as it didn't exist.")
         try:
-            client.create_collection(
+            get_qdrant_client().create_collection(
                 collection_name="projects",
                 vectors_config={
                     "readme": VectorParams(
