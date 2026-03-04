@@ -3,7 +3,6 @@ from typing import TypedDict
 
 
 class Message(TypedDict):
-    idx: int
     role: str
     content: str
     timestamp: datetime

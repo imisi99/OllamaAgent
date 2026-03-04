@@ -1,12 +1,20 @@
-from datetime import datetime
+import json
 from db import redis
+from models.mongo import Message
 
 
-def add_long_term_memory(value: str):
-    redis.get_redis_client().hset(
-        name="memory", key=datetime.now().strftime("%d/%m/%Y, %H:%M:%S"), value=value
-    )
+def add_short_term_memory(session_id: str, message: Message):
+    redis.get_redis_client().rpush(session_id, json.dumps(message))
 
 
-def view_long_term_memory():
-    redis.get_redis_client().hscan(name="memory")
+def get_short_term_memory(session_id: str) -> list[Message]:
+    msg = redis.get_redis_client().lrange(session_id, 0, -1)
+
+    if isinstance(msg, list):
+        return [json.loads(m) for m in msg]
+    else:
+        raise RuntimeError("Got an async response expected sync redis client")
+
+
+def clear_short_term_memory(session_id: str):
+    redis.get_redis_client().delete(session_id)
