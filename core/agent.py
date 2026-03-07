@@ -1,23 +1,33 @@
-import json
 import logging
-from os import stat
+from typing import Optional
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_ollama import ChatOllama
 from langchain.agents import create_agent
 from langgraph.graph import StateGraph, END
+from langgraph.graph.state import CompiledStateGraph
 from core.redis import (
     add_short_term_memory,
     clear_short_term_memory,
     get_short_term_memory,
 )
-from datetime import date, datetime
-from models.mongo import Message, Session
+from datetime import datetime
+from schemas.agent import SessionState
+from schemas.mongo import Message
 
-llm = ChatOllama(model="qwen2.5-coder")
+
+GRAPH: Optional[CompiledStateGraph[SessionState, None, SessionState, SessionState]] = (
+    None
+)
 
 
-def summarize_messages(messages: list[Message]) -> str | None:
+def get_graph() -> CompiledStateGraph[SessionState, None, SessionState, SessionState]:
+    if GRAPH is None:
+        raise RuntimeError("The graph has not been built.")
+    return GRAPH
+
+
+def summarize_messages(llm: ChatOllama, messages: list[Message]) -> str | None:
     conversation = "\n".join(f"{m['role']}: {m['content']}" for m in messages)
 
     prompt = ChatPromptTemplate.from_messages(
@@ -40,21 +50,25 @@ def summarize_messages(messages: list[Message]) -> str | None:
     return None
 
 
-def build_graph():
-    def update_memory(state):
-        user_id = state.user_id
-        session_id = state.session_id
-        message = state.message
+def build_agent(llm: ChatOllama, tools: list, prompt: SystemMessage):
+    agent = create_agent(model=llm, tools=tools, system_prompt=prompt)
+    return agent
+
+
+def build_graph(agent):
+    def update_memory(state: SessionState):
+        session_id = state["session_id"]
+        message = state["message"]
 
         add_short_term_memory(session_id, message)
 
         return state
 
-    def maybe_summarize(state):
-        session_id = state.session_id
+    def maybe_summarize(state: SessionState):
+        session_id = state["session_id"]
         msg = get_short_term_memory(session_id)
         if len(msg) > 15:
-            summarized = summarize_messages(msg)
+            summarized = summarize_messages(state["llm"], msg)
             if summarized is None:
                 return state
             clear_short_term_memory(session_id)
@@ -68,8 +82,8 @@ def build_graph():
             )
         return state
 
-    def run_agent(state):
-        session_id = state.session_id
+    def run_agent(state: SessionState):
+        session_id = state["session_id"]
         chat_history = get_short_term_memory(session_id)
         logging.info(chat_history)
 
@@ -84,10 +98,8 @@ def build_graph():
                 elif role == "assistant":
                     messages.append(AIMessage(content=msg["content"]))
 
-        agent = create_agent(model=llm)
-
         response = agent.invoke(
-            {"messages": messages + [HumanMessage(content=json.dumps(state.message))]}
+            {"session_id": state["session_id"], "messages": messages}
         )
 
         logging.info(response)
@@ -101,9 +113,18 @@ def build_graph():
             },
         )
 
-        state.response = response["messages"][-1].content
+        state["response"] = response["messages"][-1].content
         return state
 
-    graph = StateGraph(state_schema=Session)
+    graph = StateGraph(state_schema=SessionState)
 
     graph.add_node("maybe_summarize", maybe_summarize)
+    graph.add_node("update_memory", update_memory)
+    graph.add_node("run_agent", run_agent)
+
+    graph.set_entry_point("maybe_summarize")
+    graph.add_edge("maybe_summarize", "update_memory")
+    graph.add_edge("update_memory", "run_agent")
+    graph.add_edge("run_agent", END)
+
+    return graph.compile()

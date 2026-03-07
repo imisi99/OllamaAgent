@@ -1,6 +1,6 @@
 import json
 from db import redis
-from models.mongo import Message
+from schemas.mongo import Message
 
 
 def add_short_term_memory(session_id: str, message: Message):

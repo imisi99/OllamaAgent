@@ -1,15 +1,16 @@
 import os
-from typing import Optional
+from typing import Dict, Optional, Any
 from pymongo import MongoClient
 
-from models.mongo import Session
+from schemas.mongo import Session, User
 
 
-MONGO_CLIENT: Optional[MongoClient[Session]] = None
+MONGO_CLIENT: Optional[MongoClient[Dict[str, Any]]] = None
 MONGO_HOST = os.getenv("MONGO_HOST")
 MONGO_PORT = os.getenv("MONGO_PORT")
 DB_NAME = "agent"
 SESSISON = "sessions"
+USER = "user"
 
 
 def connect_mongo() -> MongoClient[Session]:
@@ -33,7 +34,7 @@ def ensure_collections():
         )
 
 
-def get_mongo_client() -> MongoClient[Session]:
+def get_mongo_client() -> MongoClient[Dict[str, Any]]:
     """Returns a pre-initialized mongo client"""
     if MONGO_CLIENT is None:
         raise RuntimeError("[MONGO] Mongo client is not initialized.")

@@ -12,3 +12,7 @@ class Session(TypedDict):
     name: str
     created_at: datetime
     messages: list[Message]
+
+
+class User(TypedDict):
+    name: str
