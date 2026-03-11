@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import TypedDict
+from typing import Any, TypedDict
 
 
 class Message(TypedDict):
@@ -16,3 +16,4 @@ class Session(TypedDict):
 
 class User(TypedDict):
     name: str
+    memory: dict[str, Any]

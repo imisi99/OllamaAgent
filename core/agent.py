@@ -19,12 +19,19 @@ from schemas.mongo import Message
 GRAPH: Optional[CompiledStateGraph[SessionState, None, SessionState, SessionState]] = (
     None
 )
+LLM: Optional[ChatOllama] = None
 
 
 def get_graph() -> CompiledStateGraph[SessionState, None, SessionState, SessionState]:
     if GRAPH is None:
         raise RuntimeError("The graph has not been built.")
     return GRAPH
+
+
+def get_llm() -> ChatOllama:
+    if LLM is None:
+        raise RuntimeError("The LLM has not been initialized")
+    return LLM
 
 
 def summarize_messages(llm: ChatOllama, messages: list[Message]) -> str | None:
@@ -56,7 +63,7 @@ def build_agent(llm: ChatOllama, tools: list, prompt: SystemMessage):
 
 
 def build_graph(agent):
-    def update_memory(state: SessionState):
+    def update_memory(state: SessionState) -> SessionState:
         session_id = state["session_id"]
         message = state["message"]
 
@@ -64,7 +71,7 @@ def build_graph(agent):
 
         return state
 
-    def maybe_summarize(state: SessionState):
+    def maybe_summarize(state: SessionState) -> SessionState:
         session_id = state["session_id"]
         msg = get_short_term_memory(session_id)
         if len(msg) > 15:
@@ -82,7 +89,7 @@ def build_graph(agent):
             )
         return state
 
-    def run_agent(state: SessionState):
+    def run_agent(state: SessionState) -> SessionState:
         session_id = state["session_id"]
         chat_history = get_short_term_memory(session_id)
         logging.info(chat_history)

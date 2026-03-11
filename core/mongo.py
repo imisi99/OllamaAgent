@@ -1,81 +1,74 @@
+from typing import Any, cast
 from bson import ObjectId
-from db.mongo import DB_NAME, SESSISON, USER, get_mongo_client
-from schemas.mongo import Message, Session
+from pymongo import MongoClient
+from schemas.mongo import Message, Session, User
 
 
-def create_session(session: Session) -> tuple[bool, str]:
-    client = get_mongo_client()
-    database = client[DB_NAME]
-    collection = database[SESSISON]
+class Database:
+    def __init__(
+        self, db: str, session: str, user: str, client: MongoClient[dict[str, Any]]
+    ) -> None:
+        self.db = db
+        self.session = session
+        self.user = user
+        self.client = client
+        self.session_collection = self.client[self.db][self.session]
+        self.user_collection = self.client[self.db][self.user]
 
-    result = collection.insert_one(
-        {
-            "name": session["name"],
-            "created_at": session["created_at"],
-            "messages": session["messages"],
-        }
-    )
-    if not result.acknowledged:
-        return False, ""
+    def create_session(self, session: Session) -> tuple[bool, str]:
+        result = self.session_collection.insert_one(
+            {
+                "name": session["name"],
+                "created_at": session["created_at"],
+                "messages": session["messages"],
+            }
+        )
+        if not result.acknowledged:
+            return False, ""
 
-    return True, str(result.inserted_id)
+        return True, str(result.inserted_id)
 
+    def fetch_session(self, session_id: str) -> Session | None:
+        result = self.session_collection.find_one({"_id": ObjectId(session_id)})
+        if result is not None:
+            if not all(k in result for k in ("name", "created_at", "messages")):
+                return None
+            return cast(Session, result)
+        return None
 
-def fetch_session(session_id: str) -> Session | None:
-    client = get_mongo_client()
-    database = client[DB_NAME]
-    collection = database[SESSISON]
+    def fetch_all_session(self) -> list[Session] | None:
+        sessions = []
 
-    result = collection.find_one({"_id": ObjectId(session_id)})
-    if result is not None:
-        session = {
-            "name": result["name"],
-            "created_at": result["created_at"],
-            "messages": result["messages"],
-        }
-        return session
+        with self.session_collection.find() as cursor:
+            for doc in cursor:
+                sessions.append(doc)
 
+        return sessions
 
-def fetch_all_session() -> list[Session] | None:
-    client = get_mongo_client()
-    database = client[DB_NAME]
-    collection = database[SESSISON]
+    def add_messages(self, session_id: str, message: Message) -> bool:
+        result = self.session_collection.update_one(
+            {"_id": ObjectId(session_id)}, {"$push": {"messages": message}}
+        )
 
-    sessions = []
+        return result.acknowledged
 
-    with collection.find() as cursor:
-        for doc in cursor:
-            sessions.append(doc)
+    def delete_session(self, session_id: str) -> bool:
+        result = self.session_collection.delete_one({"_id": ObjectId(session_id)})
 
-    return sessions
+        return result.acknowledged
 
+    def fetch_user(self, user_id: str) -> User | None:
+        result = self.user_collection.find_one({"_id": ObjectId(user_id)})
+        if result is not None:
+            if not all(k in result for k in ("name", "memory")):
+                return None
+            return cast(User, result)
 
-def add_messages(session_id: str, message: Message) -> bool:
-    client = get_mongo_client()
-    database = client[DB_NAME]
-    collection = database[SESSISON]
+        return None
 
-    result = collection.update_one(
-        {"_id": ObjectId(session_id)}, {"$push": {"messages": message}}
-    )
+    def update_user_memory(self, user_id: str, key: str, value: Any) -> bool:
+        result = self.user_collection.update_one(
+            {"_id": ObjectId(user_id)}, {"$set": {f"memory.{key}": value}}
+        )
 
-    return result.acknowledged
-
-
-def delete_session(session_id: str) -> bool:
-    client = get_mongo_client()
-    database = client[DB_NAME]
-    collection = database[SESSISON]
-
-    result = collection.delete_one({"_id": ObjectId(session_id)})
-
-    return result.acknowledged
-
-
-def fetch_user(user_id: str):
-    client = get_mongo_client()
-    database = client[DB_NAME]
-    collection = database[USER]
-
-    result = collection.find_one({"_id": ObjectId(user_id)})
-    return result
+        return result.acknowledged
