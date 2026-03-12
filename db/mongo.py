@@ -3,7 +3,7 @@ from typing import Dict, Optional, Any
 from pymongo import MongoClient
 
 from core.mongo import Database
-from schemas.mongo import Session, User
+from schemas.mongo import Session
 
 
 MONGO_CLIENT: Optional[MongoClient[Dict[str, Any]]] = None

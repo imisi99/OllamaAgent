@@ -6,8 +6,6 @@ services:
     ports:
       - "6333:6333"
       - "6334:6334"
-    environment:
-      - QDRANT__SERVICE__API_KEY=${QDRANT_API_KEY}
     volumes:
       - qdrant:/qdrant/storage
     healthcheck:
@@ -85,18 +83,45 @@ services:
   server:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.server
     container_name: agent_server
-    restart: always
+    restart: no
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       - MONGO_USERNAME=${MONGO_USERNAME}
-    depends_on:
-      mongo:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
+      - REDIS_PASS=${REDIS_PASS}
+      - QDRANT_HOST=${QDRANT_HOST}
+      - QDRANT_PORT=${QDRANT_PORT}
+      - MONGO_HOST=${MONGO_HOST}
+      - MONGO_PORT=${MONGO_PORT}
+      - MONGO_PASSWORD=${MONGO_PASSWORD}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL}
+    # depends_on:
+    #   mongo:
+    #     condition: service_healthy
+    #   redis:
+    #     condition: service_healthy
+    # healthcheck:
+    #   test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+    #   interval: 10s
+    #   timeout: 5s
+    #   retries: 4
+    networks:
+      - agent-shared-network
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.app
+    container_name: agent_app
+    restart: always
+    # depends_on:
+    #   server:
+    #     condition: service_healthy
     healthcheck:
-      test: ["CMD", ""]
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
       interval: 10s
       timeout: 5s
       retries: 4

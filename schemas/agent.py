@@ -1,7 +1,7 @@
 from typing import TypedDict
 
 from langchain_ollama import ChatOllama
-from mongo import Message
+from .mongo import Message
 
 
 class SessionConversation(TypedDict):

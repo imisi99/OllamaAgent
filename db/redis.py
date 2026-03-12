@@ -4,12 +4,13 @@ import redis
 
 REDIS_HOST = os.getenv("REDIS_HOST", "")
 REDIS_PORT = int(os.getenv("REDIS_PORT", "0"))
+REDIS_PASS = os.getenv("REDIS_PASS", "")
 REDIS_CLIENT: Optional[redis.Redis] = None
 
 
 def connect_redis() -> redis.Redis:
     """Connect and returns a redis connection client"""
-    client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT)
+    client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, password=REDIS_PASS)
     return client
 
 

@@ -1,4 +1,5 @@
 import logging
+import os
 from langchain_ollama import ChatOllama
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
@@ -6,6 +7,9 @@ from core.tools import tools
 from core.prompt import system_prompt
 from db import mongo, qdrant, redis
 from core import agent
+from app.server import serve
+
+logging.basicConfig(level=logging.INFO)
 
 
 @asynccontextmanager
@@ -19,12 +23,16 @@ async def lifespan(app: FastAPI):
 
         mongo.MONGO_DATABASE = mongo.create_mongo_database()
 
-        agent.LLM = ChatOllama(model="qwen2.5-coder")
+        OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "")
+
+        agent.LLM = ChatOllama(model="qwen2.5-coder", base_url=OLLAMA_BASE_URL)
         agent_graph = agent.build_agent(agent.LLM, tools, system_prompt)
         agent.GRAPH = agent.build_graph(agent_graph)
 
     except Exception as e:
-        logging.error("An error occured while trying startup app -> %s", e)
+        logging.error(
+            "An error occured while trying startup app -> %s", e, exc_info=True
+        )
     yield
     qdrant.QDRANT_CLIENT.close() if qdrant.QDRANT_CLIENT is not None else qdrant.QDRANT_CLIENT
     mongo.MONGO_CLIENT.close() if mongo.MONGO_CLIENT is not None else mongo.MONGO_CLIENT
@@ -32,3 +40,11 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+
+app.include_router(serve)
