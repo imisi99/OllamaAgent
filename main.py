@@ -16,18 +16,19 @@ logging.basicConfig(level=logging.INFO)
 async def lifespan(app: FastAPI):
     """Lifespan for app"""
     try:
-        qdrant.QDRANT_CLIENT = qdrant.connect_qdrant()
-        qdrant.ensure_collections()
-        mongo.MONGO_CLIENT = mongo.connect_mongo()
-        redis.REDIS_CLIENT = redis.connect_redis()
+        # qdrant.QDRANT_CLIENT = qdrant.connect_qdrant()
+        # qdrant.ensure_collections()
+        # mongo.MONGO_CLIENT = mongo.connect_mongo()
+        # redis.REDIS_CLIENT = redis.connect_redis()
+        #
+        # mongo.MONGO_DATABASE = mongo.create_mongo_database()
+        #
+        # OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "")
 
-        mongo.MONGO_DATABASE = mongo.create_mongo_database()
-
-        OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "")
-
-        agent.LLM = ChatOllama(model="qwen2.5-coder", base_url=OLLAMA_BASE_URL)
-        agent_graph = agent.build_agent(agent.LLM, tools, system_prompt)
-        agent.GRAPH = agent.build_graph(agent_graph)
+        # agent.LLM = ChatOllama(model="qwen2.5-coder", base_url=OLLAMA_BASE_URL)
+        # agent_graph = agent.build_agent(agent.LLM, tools, system_prompt)
+        # agent.GRAPH = agent.build_graph(agent_graph)
+        logging.info("Please work")
 
     except Exception as e:
         logging.error(

@@ -1,4 +1,5 @@
 import json
+import httpx
 from typing import Any
 from langchain.tools import tool
 
@@ -37,4 +38,25 @@ def save_insight_about_user(user_id: str, key: str, value: Any) -> str:
     return "Operation was unsuccessful"
 
 
-tools = [get_user_info, save_insight_about_user]
+@tool(parse_docstring=True)
+def web_search(query: str, max_results: int = 5) -> list[dict]:
+    """
+    This make a web search using the query and max results (The max results defaults to 5)
+
+    Args:
+        query: The search query to use for the web search
+        max_results: The maximum number of contents to return from the web search
+    """
+    resp = httpx.get(
+        "http://searxng:8080/search",
+        params={"q": query, "format": "json", "engines": "google,bing,duckduckgo"},
+    )
+
+    results = resp.json().get("results", [])
+    return [
+        {"title": r["title"], "url": r["url"], "content": r.get("content", "")}
+        for r in results[:max_results]
+    ]
+
+
+tools = [get_user_info, save_insight_about_user, web_search]
