@@ -9,6 +9,7 @@ class Message(TypedDict):
 
 
 class Session(TypedDict):
+    _id: str
     name: str
     created_at: datetime
     messages: list[Message]
