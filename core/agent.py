@@ -105,6 +105,7 @@ def build_graph(agent):
                 elif role == "assistant":
                     messages.append(AIMessage(content=msg["content"]))
 
+        # TODO: Use a check for the token emitting for streaming messages with a check on the final output if it isn't then redisplay
         response = agent.invoke(
             {"session_id": state["session_id"], "messages": messages}
         )
