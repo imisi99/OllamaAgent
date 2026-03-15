@@ -5,13 +5,13 @@ from typing import Any, TypedDict
 class Message(TypedDict):
     role: str
     content: str
-    timestamp: datetime
+    timestamp: str
 
 
 class Session(TypedDict):
     _id: str
     name: str
-    created_at: datetime
+    created_at: str
     messages: list[Message]
 
 

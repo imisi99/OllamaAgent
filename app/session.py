@@ -1,10 +1,10 @@
 import logging
 from datetime import datetime
-from os import stat
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import JSONResponse
 
 from core.agent import get_llm
+from core.mongo import Database
 from db.mongo import get_mongo_database
 from schemas.agent import SessionConversation
 
@@ -12,9 +12,9 @@ session = APIRouter()
 
 
 @session.post("/session/create")
-async def create_session(input: SessionConversation):
-    db = get_mongo_database()
-
+async def create_session(
+    input: SessionConversation, db: Database = Depends(get_mongo_database)
+):
     prompt = (
         "Generate a casual title for a chat session not more than 5 words using the user first input. You respond should be the title ONLY (one title) \n\n\n"
         + input["message"]["content"]
@@ -29,7 +29,12 @@ async def create_session(input: SessionConversation):
         title = response.content
 
     created, id = db.create_session(
-        {"_id": "", "messages": [], "created_at": datetime.now(), "name": title}
+        {
+            "_id": "",
+            "messages": [],
+            "created_at": datetime.now().isoformat(),
+            "name": title,
+        }
     )
 
     if not created:
@@ -41,32 +46,29 @@ async def create_session(input: SessionConversation):
 
 
 @session.get("/session/all")
-async def fetch_all_session():
-    db = get_mongo_database()
-
+async def fetch_all_session(db: Database = Depends(get_mongo_database)):
     sessions = db.fetch_all_session()
     if sessions is None or len(sessions) == 0:
         return JSONResponse(status_code=404, content={"msg": "No session created yet."})
     JSONResponse(status_code=200, content={"sessions": sessions})
 
 
-@session.get("/session/:id")
-async def fetch_single_session(id: str):
-    db = get_mongo_database()
-
-    s_session = db.fetch_session(id)
+@session.get("/session/{session_id}")
+async def fetch_single_session(
+    session_id: str, db: Database = Depends(get_mongo_database)
+):
+    s_session = db.fetch_session(session_id)
     if s_session is None:
         return JSONResponse(
-            status_code=404, content={"msg": f"Session with id -> {id} not found."}
+            status_code=404,
+            content={"msg": f"Session with id -> {session_id} not found."},
         )
     return JSONResponse(status_code=200, content={"session": s_session})
 
 
-@session.delete("/session/delete")
-async def delete_session(id: str):
-    db = get_mongo_database()
-
-    deleted = db.delete_session(id)
+@session.delete("/session/delete/{session_id}")
+async def delete_session(session_id: str, db: Database = Depends(get_mongo_database)):
+    deleted = db.delete_session(session_id)
     if not deleted:
         raise HTTPException(
             status_code=500, detail={"msg": "Failed to delete the session."}

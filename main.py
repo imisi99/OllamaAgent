@@ -9,6 +9,7 @@ from core.prompt import system_prompt
 from db import mongo, qdrant, redis
 from core import agent
 from app.server import serve
+from app.session import session
 
 logging.basicConfig(level=logging.INFO)
 
@@ -39,6 +40,7 @@ async def lifespan(app: FastAPI):
         logging.error(
             "An error occured while trying startup app -> %s", e, exc_info=True
         )
+        raise RuntimeError("")
     yield
     async with httpx.AsyncClient() as client:
         base_url = os.getenv("OLLAMA_BASE_URL", "")
@@ -59,4 +61,5 @@ def health():
     return {"status": "ok"}
 
 
+app.include_router(session)
 app.include_router(serve)
