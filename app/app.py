@@ -1,5 +1,11 @@
+from datetime import datetime
+from starlette import status
+import logging
 import random
+import requests
 import streamlit as st
+
+from schemas.mongo import Session
 
 st.header(":red[Ollama] :grey[_Agent_]", divider="grey", width="content")
 
@@ -13,16 +19,26 @@ chat_holders = [
 with st.sidebar:
     if st.button("+ New Chat"):
         st.session_state.session_id = ""
-        st.session_state.messages = [{"role": "assistant", "content": "yeah"}]
+        st.session_state.messages = []
         st.session_state.chat_holder = random.randint(0, len(chat_holders) - 1)
         st.rerun()
 
-    sessions = [{"name": "stuff", "id": "stuff"}]
+    sessions_req = requests.get(url="http://server:8000/session/all")
+    if sessions_req.status_code == status.HTTP_404_NOT_FOUND:
+        st.info("you have no existing session \n start a new session !")
+
+    if sessions_req.status_code != 200 or "sessions" not in sessions_req.json():
+        logging.error(
+            f"Failed to fetch available sessions from db, status_code -> {sessions_req.status_code}, json -> {sessions_req.json()}"
+        )
+        st.error("Failed to fetch sessions.")
+
+    sessions: list[Session] = [sessions_req.json()["sessions"]]
     for session in sessions:
-        if st.button(session["name"], key=session["id"]):
-            st.session_state.session_id = ""
+        if st.button(session["name"]):
+            st.session_state.session_id = session["_id"]
             st.session_state.chat_holder = -1
-            st.session_state.messages = []
+            st.session_state.messages = [session["messages"]]
             st.rerun()
 
 if "chat_holder" not in st.session_state:
@@ -41,12 +57,57 @@ if st.session_state.messages is not None:
             st.markdown(msg["content"])
 
 if prompt := st.chat_input("", key="chat", accept_file="multiple"):
+    # New chat will have a empty session id in the state
+    if st.session_state.session_id == "":
+        new_session = requests.post(
+            url="http://server:8000/session/create",
+            json={
+                "session_id": "",
+                "message": {
+                    "role": "user",
+                    "content": prompt.text,
+                    "timestamp": datetime.now().isoformat(),
+                },
+            },
+        )
+
+        if (
+            new_session.status_code != status.HTTP_200_OK
+            or "id" not in new_session.json()
+        ):
+            logging.error(
+                f"Failed to create a new session, status_code -> {new_session.status_code}, json -> {new_session.json()}"
+            )
+            st.error("Failed to start a new session.")
+            st.stop()
+
+        st.session_state.session_id = new_session.json()["id"]
+
     st.session_state.messages.append({"role": "user", "content": prompt.text})
     with st.chat_message("user"):
         st.markdown(prompt.text)
 
     with st.chat_message("assistant"):
-        response = "response"
-        st.markdown(response)
+        response = requests.post(
+            url="http://server:8000/agent/chat",
+            json={
+                "session_id": st.session_state.session_id,
+                "message": {
+                    "role": "user",
+                    "content": prompt.text,
+                    "timestamp": datetime.now().isoformat(),
+                },
+            },
+        )
 
-    st.session_state.messages.append({"role": "assistant", "content": response})
+        if response.status_code != 200 or "msg" not in response.json():
+            logging.error(
+                f"An error occured while trying to chat with agent, status_code -> {response.status_code}, json -> {response.json()}"
+            )
+            st.error("Failed to communicate with agent.")
+        print(response)
+        st.markdown(response.json()["msg"])
+
+    st.session_state.messages.append(
+        {"role": "assistant", "content": response.json()["msg"]}
+    )

@@ -26,7 +26,6 @@ class MockDatabase:
         if len(self.session) == 0:
             return None
         sessions = [session for _, session in self.session.items()]
-        print(sessions)
         return sessions
 
     def add_messages(self, session_id: str, message: Message) -> bool:

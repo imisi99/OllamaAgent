@@ -53,8 +53,7 @@ async def test_fetch_sessions():
     ) as ac:
         response = await ac.get("/session/all")
     assert response.status_code == 200
-    print(response.json())
-    assert sess_id in response.json()["sessions"]
+    assert sess_id in response.json()["sessions"][0]["_id"]
 
 
 @pytest.mark.asyncio

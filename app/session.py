@@ -10,6 +10,9 @@ from schemas.agent import SessionConversation
 
 session = APIRouter()
 
+# TODO: Check if it's possible to use actual datetime for the created at in both the session and message
+# See if it's possible to get the actual errors for failed ops to log them
+
 
 @session.post("/session/create")
 async def create_session(
@@ -42,7 +45,7 @@ async def create_session(
             status_code=500, detail={"msg": "Failed to create the session."}
         )
 
-    return JSONResponse(status_code=200, content={"id": id, "msg": "Success."})
+    return JSONResponse(status_code=200, content={"id": id})
 
 
 @session.get("/session/all")
@@ -50,7 +53,7 @@ async def fetch_all_session(db: Database = Depends(get_mongo_database)):
     sessions = db.fetch_all_session()
     if sessions is None or len(sessions) == 0:
         return JSONResponse(status_code=404, content={"msg": "No session created yet."})
-    JSONResponse(status_code=200, content={"sessions": sessions})
+    return JSONResponse(status_code=200, content={"sessions": sessions})
 
 
 @session.get("/session/{session_id}")
