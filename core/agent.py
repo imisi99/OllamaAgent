@@ -84,7 +84,7 @@ def build_graph(agent):
                 {
                     "role": "system",
                     "content": f"SUMMARY: {summarized}",
-                    "timestamp": datetime.now(),
+                    "timestamp": datetime.now().isoformat(),
                 },
             )
         return state
@@ -92,7 +92,6 @@ def build_graph(agent):
     def run_agent(state: SessionState) -> SessionState:
         session_id = state["session_id"]
         chat_history = get_short_term_memory(session_id)
-        logging.info(chat_history)
 
         messages = []
         if chat_history:
@@ -117,7 +116,7 @@ def build_graph(agent):
             {
                 "role": "system",
                 "content": response["messages"][-1].content,
-                "timestamp": datetime.now(),
+                "timestamp": datetime.now().isoformat(),
             },
         )
 

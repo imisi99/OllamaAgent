@@ -5,8 +5,6 @@ from unittest.mock import MagicMock, patch
 from main import app
 
 
-global sess_id
-
 sess_id = ""
 
 

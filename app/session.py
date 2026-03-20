@@ -1,5 +1,6 @@
 import logging
 from datetime import datetime
+from os import stat
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import JSONResponse
 
@@ -7,6 +8,7 @@ from core.agent import get_llm
 from core.mongo import Database
 from db.mongo import get_mongo_database
 from schemas.agent import SessionConversation
+from schemas.mongo import Message
 
 session = APIRouter()
 
@@ -19,7 +21,7 @@ async def create_session(
     input: SessionConversation, db: Database = Depends(get_mongo_database)
 ):
     prompt = (
-        "Generate a casual title for a chat session not more than 5 words using the user first input. You respond should be the title ONLY (one title) \n\n\n"
+        "Generate a casual title for a chat session not more than 5 words using the user first input. You respond should be the title ONLY (one title) without the string quote an example is \n Explaining Docker Compose \n \n\n\n"
         + input["message"]["content"]
     )
 
@@ -46,6 +48,18 @@ async def create_session(
         )
 
     return JSONResponse(status_code=200, content={"id": id})
+
+
+@session.post("/session/msg/{session_id}")
+async def add_message(
+    message: Message, session_id: str, db: Database = Depends(get_mongo_database)
+):
+    created = db.add_messages(session_id, message)
+    if not created:
+        raise HTTPException(
+            status_code=500, detail={"msg": "Failed to add message to session."}
+        )
+    return JSONResponse(status_code=200, content={"msg": "Message added."})
 
 
 @session.get("/session/all")

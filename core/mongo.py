@@ -31,9 +31,24 @@ class Database:
     def fetch_session(self, session_id: str) -> Session | None:
         result = self.session_collection.find_one({"_id": ObjectId(session_id)})
         if result is not None:
-            if not all(k in result for k in ("name", "created_at", "messages")):
-                return None
-            return cast(Session, result)
+            message: list[Message] = []
+            for msg in result["messages"]:
+                message.append(
+                    {
+                        "content": msg["content"],
+                        "role": msg["role"],
+                        "timestamp": msg["timestamp"],
+                    }
+                )
+
+            session: Session = {
+                "_id": str(result["_id"]),
+                "name": result["name"],
+                "messages": message,
+                "created_at": result["created_at"],
+            }
+
+            return session
         return None
 
     def fetch_all_session(self) -> list[Session] | None:
@@ -43,7 +58,28 @@ class Database:
             for doc in cursor:
                 sessions.append(doc)
 
-        return sessions
+        result: list[Session] = []
+        for session in sessions:
+            message: list[Message] = []
+            for msg in session["messages"]:
+                message.append(
+                    {
+                        "content": msg["content"],
+                        "role": msg["role"],
+                        "timestamp": msg["timestamp"],
+                    }
+                )
+
+            result.append(
+                {
+                    "_id": str(session["_id"]),
+                    "name": session["name"],
+                    "created_at": session["created_at"],
+                    "messages": message,
+                }
+            )
+
+        return result
 
     def add_messages(self, session_id: str, message: Message) -> bool:
         result = self.session_collection.update_one(

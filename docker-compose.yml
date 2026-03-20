@@ -20,7 +20,7 @@ services:
           "--spider",
           "http://localhost:8080/healthz",
         ]
-      interval: 10s
+      interval: 30s
       timeout: 3s
       retries: 5
       start_period: 15s
@@ -43,7 +43,7 @@ services:
           "-c",
           "exec 3<>/dev/tcp/127.0.0.1/6333 && echo -e 'GET /readyz HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q 'HTTP/1.1 200' <&3",
         ]
-      interval: 10s
+      interval: 40s
       timeout: 3s
       retries: 3
       start_period: 10s
@@ -74,7 +74,7 @@ services:
           "--authenticationDatabase",
           "admin",
         ]
-      interval: 10s
+      interval: 40s
       timeout: 5s
       retries: 2
       start_period: 15s
@@ -102,7 +102,7 @@ services:
       - redis-data:/redis/storage
     healthcheck:
       test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
-      interval: 10s
+      interval: 40s
       timeout: 3s
       retries: 5
     networks:
@@ -145,7 +145,7 @@ services:
           "-c",
           "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')",
         ]
-      interval: 10s
+      interval: 40s
       timeout: 5s
       retries: 4
       start_period: 15s
@@ -170,7 +170,7 @@ services:
           "-c",
           "import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health')",
         ]
-      interval: 10s
+      interval: 40s
       timeout: 5s
       retries: 4
     networks:

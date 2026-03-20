@@ -1,4 +1,3 @@
-import logging
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
@@ -19,6 +18,5 @@ def chat_agent(input: SessionConversation):
         }
     )
     response = get_graph().invoke(session)
-    logging.info(response)
 
     return JSONResponse(status_code=200, content={"msg": response["response"]})

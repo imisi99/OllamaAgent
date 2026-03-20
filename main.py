@@ -30,8 +30,7 @@ async def lifespan(app: FastAPI):
         agent.LLM = ChatOllama(
             model="qwen2.5-coder",
             base_url=OLLAMA_BASE_URL,
-            reasoning=True,
-            keep_alive="-1",
+            keep_alive=-1,
         )
         agent_graph = agent.build_agent(agent.LLM, tools, system_prompt)
         agent.GRAPH = agent.build_graph(agent_graph)
