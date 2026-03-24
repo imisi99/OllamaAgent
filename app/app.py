@@ -16,7 +16,11 @@ chat_holders = [
 ]
 
 with st.sidebar:
-    if st.button("+ New Chat"):
+    if st.button(
+        "New Chat",
+        icon=":material/thumb_up:",
+        type="tertiary",
+    ):
         st.session_state.session_id = ""
         st.session_state.messages = []
         st.session_state.chat_holder = random.randint(0, len(chat_holders) - 1)
@@ -35,8 +39,8 @@ with st.sidebar:
 
         else:
             sessions = sessions_req.json()["sessions"]
-            for session in sessions:
-                if st.button(session["name"]):
+            for session in reversed(sessions):
+                if st.button(session["name"], use_container_width=True):
                     st.session_state.session_id = session["_id"]
                     st.session_state.chat_holder = -1
                     st.session_state.messages = session["messages"]
@@ -79,6 +83,8 @@ if prompt := st.chat_input("", key="chat", accept_file="multiple"):
             st.error("Failed to start a new session.")
             st.stop()
         st.session_state.session_id = new_session.json()["id"]
+        st.session_state.chat_holder = -1
+        st.session_state.first = True
 
     st.session_state.messages.append({"role": "user", "content": prompt.text})
     with st.chat_message("user"):
@@ -134,3 +140,7 @@ if prompt := st.chat_input("", key="chat", accept_file="multiple"):
     st.session_state.messages.append(
         {"role": "assistant", "content": response.json()["msg"]}
     )
+
+    if "first" in st.session_state and st.session_state.first:
+        st.session_state.first = False
+        st.rerun()

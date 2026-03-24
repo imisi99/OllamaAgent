@@ -6,6 +6,7 @@ from langchain_ollama import ChatOllama
 from langchain.agents import create_agent
 from langgraph.graph import StateGraph, END
 from langgraph.graph.state import CompiledStateGraph
+from langgraph.prebuilt import create_react_agent
 from core.redis import (
     add_short_term_memory,
     clear_short_term_memory,
