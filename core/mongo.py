@@ -51,7 +51,38 @@ class Database:
             return session
         return None
 
-    def fetch_all_session(self) -> list[Session] | None:
+    def fetch_sessions(self, ids: list[str]) -> list[Session]:
+        sessions = []
+        with self.session_collection.find(
+            {"_id": [ObjectId(id) for id in ids]}
+        ) as cursor:
+            for doc in cursor:
+                sessions.append(doc)
+
+        result: list[Session] = []
+        for session in sessions:
+            message: list[Message] = []
+            for msg in session["messages"]:
+                message.append(
+                    {
+                        "content": msg["content"],
+                        "role": msg["role"],
+                        "timestamp": msg["timestamp"],
+                    }
+                )
+
+            result.append(
+                {
+                    "_id": str(session["_id"]),
+                    "name": session["name"],
+                    "created_at": session["created_at"],
+                    "messages": message,
+                }
+            )
+
+        return result
+
+    def fetch_all_session(self) -> list[Session]:
         sessions = []
 
         with self.session_collection.find() as cursor:
