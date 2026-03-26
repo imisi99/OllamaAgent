@@ -4,6 +4,7 @@ from typing import Optional
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import Distance, VectorParams
 
+from core.emb import EmbeddingModel
 from core.qdrant import Qdrant
 
 QDRANT_CLIENT: Optional[QdrantClient] = None
@@ -48,8 +49,8 @@ def get_qdrant_client() -> QdrantClient:
     return QDRANT_CLIENT
 
 
-def create_qdrant_database() -> Qdrant:
-    database = Qdrant(get_qdrant_client(), "")
+def create_qdrant_database(embedding: EmbeddingModel) -> Qdrant:
+    database = Qdrant(get_qdrant_client(), embedding)
     return database
 
 

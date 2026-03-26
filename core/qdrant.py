@@ -2,16 +2,17 @@ import logging
 from qdrant_client import QdrantClient
 from qdrant_client.models import PointStruct
 from qdrant_client.http.models import UpdateStatus
+from emb import EmbeddingModel
 from schemas.mongo import Session
 
 
 class Qdrant:
-    def __init__(self, client: QdrantClient, embedding: str) -> None:
+    def __init__(self, client: QdrantClient, embedding: EmbeddingModel) -> None:
         self.client = client
         self.embedding = embedding
 
     def create_point(self, id: str, session: Session) -> bool:
-        vector = [0.1]
+        vector = self.embedding.generate_vector_embedding(session)
         result = self.client.upsert(
             collection_name="chats",
             points=[
@@ -43,7 +44,7 @@ class Qdrant:
             )
             return False
 
-        vector = [0.1]
+        vector = self.embedding.generate_vector_embedding(session)
         result = self.client.upsert(
             collection_name="chats",
             points=[
@@ -77,9 +78,7 @@ class Qdrant:
     ) -> tuple[list[tuple[Session, float]], float] | None:
         vector = None
         if use_query:
-            vector = [
-                0.1
-            ]  # TODO: Transform the query to a vector using the embedding param
+            vector = self.embedding.generate_vector_embedding_query(query)
         else:
             point = self.client.retrieve(
                 collection_name="chats", ids=[id], with_vectors=True

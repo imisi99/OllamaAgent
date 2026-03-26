@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from core.tools import tools
 from core.prompt import system_prompt
 from db import mongo, qdrant, redis
-from core import agent
+from core import agent, emb
 from app.server import serve
 from app.session import session
 
@@ -23,7 +23,9 @@ async def lifespan(app: FastAPI):
         mongo.MONGO_CLIENT = mongo.connect_mongo()
         redis.REDIS_CLIENT = redis.connect_redis()
 
+        emb.EMB_MODEL = emb.create_emb_model()
         mongo.MONGO_DATABASE = mongo.create_mongo_database()
+        qdrant.QDRANT_DATABASE = qdrant.create_qdrant_database(emb.get_emb_model())
 
         OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "")
 
