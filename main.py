@@ -49,9 +49,12 @@ async def lifespan(app: FastAPI):
             f"{base_url}/api/chat",
             json={"model": "qwen2.5-coder", "keep_alive": 0},
         )
-    qdrant.QDRANT_CLIENT.close() if qdrant.QDRANT_CLIENT is not None else qdrant.QDRANT_CLIENT
-    mongo.MONGO_CLIENT.close() if mongo.MONGO_CLIENT is not None else mongo.MONGO_CLIENT
-    redis.REDIS_CLIENT.close() if redis.REDIS_CLIENT is not None else redis.REDIS_CLIENT
+    await (
+        qdrant.QDRANT_DATABASE.finish_queue()
+    ) if qdrant.QDRANT_DATABASE is not None else None
+    qdrant.QDRANT_CLIENT.close() if qdrant.QDRANT_CLIENT is not None else None
+    mongo.MONGO_CLIENT.close() if mongo.MONGO_CLIENT is not None else None
+    redis.REDIS_CLIENT.close() if redis.REDIS_CLIENT is not None else None
 
 
 app = FastAPI(lifespan=lifespan)

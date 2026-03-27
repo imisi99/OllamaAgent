@@ -6,7 +6,9 @@ from fastapi.responses import JSONResponse
 
 from core.agent import get_llm
 from core.mongo import Database
+from core.qdrant import Qdrant
 from db.mongo import get_mongo_database
+from db.qdrant import get_qdrant_database
 from schemas.agent import SessionConversation
 from schemas.mongo import Message
 
@@ -52,13 +54,17 @@ async def create_session(
 
 @session.post("/session/msg/{session_id}")
 async def add_message(
-    message: Message, session_id: str, db: Database = Depends(get_mongo_database)
+    message: Message,
+    session_id: str,
+    db: Database = Depends(get_mongo_database),
+    qdb: Qdrant = Depends(get_qdrant_database),
 ):
     created = db.add_messages(session_id, message)
     if not created:
         raise HTTPException(
             status_code=500, detail={"msg": "Failed to add message to session."}
         )
+    qdb.add_job(session_id, message)
     return JSONResponse(status_code=200, content={"msg": "Message added."})
 
 
