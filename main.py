@@ -26,6 +26,7 @@ async def lifespan(app: FastAPI):
         emb.EMB_MODEL = emb.create_emb_model()
         mongo.MONGO_DATABASE = mongo.create_mongo_database()
         qdrant.QDRANT_DATABASE = qdrant.create_qdrant_database(emb.get_emb_model())
+        redis.REDIS_DATABASE = redis.create_redis_database()
 
         OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "")
 

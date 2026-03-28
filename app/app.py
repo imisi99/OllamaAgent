@@ -1,5 +1,4 @@
 from datetime import datetime
-from starlette import status
 import logging
 import random
 import requests

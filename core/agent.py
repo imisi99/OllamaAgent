@@ -7,11 +7,7 @@ from langchain.agents import create_agent
 from langgraph.graph import StateGraph, END
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import create_react_agent
-from core.redis import (
-    add_short_term_memory,
-    clear_short_term_memory,
-    get_short_term_memory,
-)
+from db.redis import get_redis_database
 from datetime import datetime
 from schemas.agent import SessionState
 from schemas.mongo import Message
@@ -68,19 +64,19 @@ def build_graph(agent):
         session_id = state["session_id"]
         message = state["message"]
 
-        add_short_term_memory(session_id, message)
+        get_redis_database().add_short_term_memory(session_id, message)
 
         return state
 
     def maybe_summarize(state: SessionState) -> SessionState:
         session_id = state["session_id"]
-        msg = get_short_term_memory(session_id)
+        msg = get_redis_database().get_short_term_memory(session_id)
         if len(msg) > 15:
             summarized = summarize_messages(state["llm"], msg)
             if summarized is None:
                 return state
-            clear_short_term_memory(session_id)
-            add_short_term_memory(
+            get_redis_database().clear_short_term_memory(session_id)
+            get_redis_database().add_short_term_memory(
                 session_id,
                 {
                     "role": "system",
@@ -92,7 +88,7 @@ def build_graph(agent):
 
     def run_agent(state: SessionState) -> SessionState:
         session_id = state["session_id"]
-        chat_history = get_short_term_memory(session_id)
+        chat_history = get_redis_database().get_short_term_memory(session_id)
 
         messages = []
         if chat_history:
@@ -112,7 +108,7 @@ def build_graph(agent):
 
         logging.info(response)
 
-        add_short_term_memory(
+        get_redis_database().add_short_term_memory(
             session_id,
             {
                 "role": "system",
