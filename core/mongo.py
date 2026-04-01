@@ -82,10 +82,33 @@ class Database:
 
         return result
 
+    def fetch_all_session_preview(self) -> list[Session]:
+        sessions = []
+
+        with self.session_collection.find(
+            {"_id": 1, "name": 1, "created_at": 1}
+        ) as cursor:
+            for doc in cursor:
+                sessions.append(doc)
+
+        result: list[Session] = []
+        for session in sessions:
+            message: list[Message] = []
+            result.append(
+                {
+                    "_id": str(session["_id"]),
+                    "name": session["name"],
+                    "created_at": session["created_at"],
+                    "messages": message,
+                }
+            )
+
+        return result
+
     def fetch_all_session(self) -> list[Session]:
         sessions = []
 
-        with self.session_collection.find() as cursor:
+        with self.session_collection.find({}) as cursor:
             for doc in cursor:
                 sessions.append(doc)
 
@@ -100,7 +123,6 @@ class Database:
                         "timestamp": msg["timestamp"],
                     }
                 )
-
             result.append(
                 {
                     "_id": str(session["_id"]),

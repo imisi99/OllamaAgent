@@ -24,8 +24,8 @@ def get_redis_client() -> redis.Redis:
     return REDIS_CLIENT
 
 
-def create_redis_database() -> Redis:
-    cache = Redis()
+def create_redis_database(client: redis.Redis) -> Redis:
+    cache = Redis(client)
     return cache
 
 

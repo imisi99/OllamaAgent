@@ -6,7 +6,6 @@ from langchain_ollama import ChatOllama
 from langchain.agents import create_agent
 from langgraph.graph import StateGraph, END
 from langgraph.graph.state import CompiledStateGraph
-from langgraph.prebuilt import create_react_agent
 from db.redis import get_redis_database
 from datetime import datetime
 from schemas.agent import SessionState
@@ -70,13 +69,14 @@ def build_graph(agent):
 
     def maybe_summarize(state: SessionState) -> SessionState:
         session_id = state["session_id"]
-        msg = get_redis_database().get_short_term_memory(session_id)
+        redDB = get_redis_database()
+        msg = redDB.get_short_term_memory(session_id)
         if len(msg) > 15:
             summarized = summarize_messages(state["llm"], msg)
             if summarized is None:
                 return state
-            get_redis_database().clear_short_term_memory(session_id)
-            get_redis_database().add_short_term_memory(
+            redDB.clear_short_term_memory(session_id)
+            redDB.add_short_term_memory(
                 session_id,
                 {
                     "role": "system",

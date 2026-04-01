@@ -1,6 +1,5 @@
 import logging
 from datetime import datetime
-from os import stat
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import JSONResponse
 
@@ -71,6 +70,14 @@ async def add_message(
 @session.get("/session/all")
 async def fetch_all_session(db: Database = Depends(get_mongo_database)):
     sessions = db.fetch_all_session()
+    if sessions is None or len(sessions) == 0:
+        return JSONResponse(status_code=404, content={"msg": "No session created yet."})
+    return JSONResponse(status_code=200, content={"sessions": sessions})
+
+
+@session.get("/session/all/preview")
+async def fetch_all_session_preview(db: Database = Depends(get_mongo_database)):
+    sessions = db.fetch_all_session_preview()
     if sessions is None or len(sessions) == 0:
         return JSONResponse(status_code=404, content={"msg": "No session created yet."})
     return JSONResponse(status_code=200, content={"sessions": sessions})

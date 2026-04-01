@@ -4,7 +4,7 @@ from typing import cast
 from qdrant_client import QdrantClient
 from qdrant_client.models import PointStruct
 from qdrant_client.http.models import UpdateStatus
-from emb import EmbeddingModel
+from .emb import EmbeddingModel
 from schemas.mongo import Message, Session
 
 
