@@ -2,6 +2,7 @@ import os
 from typing import Optional
 import redis
 
+from core.mongo import Database
 from core.redis import Redis
 
 REDIS_HOST = os.getenv("REDIS_HOST", "")
@@ -24,8 +25,8 @@ def get_redis_client() -> redis.Redis:
     return REDIS_CLIENT
 
 
-def create_redis_database(client: redis.Redis) -> Redis:
-    cache = Redis(client)
+def create_redis_database(client: redis.Redis, mongoDB: Database) -> Redis:
+    cache = Redis(client, mongoDB)
     return cache
 
 

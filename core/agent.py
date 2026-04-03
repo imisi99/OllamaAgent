@@ -71,7 +71,7 @@ def build_graph(agent):
         session_id = state["session_id"]
         redDB = get_redis_database()
         msg = redDB.get_short_term_memory(session_id)
-        if len(msg) > 15:
+        if len(msg) > 25:
             summarized = summarize_messages(state["llm"], msg)
             if summarized is None:
                 return state

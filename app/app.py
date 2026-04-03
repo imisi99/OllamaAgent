@@ -25,14 +25,16 @@ with st.sidebar:
         st.session_state.chat_holder = random.randint(0, len(chat_holders) - 1)
         st.rerun()
 
-    if "sessions" not in st.session_state or (
-        "update_view" in st.session_state and st.session_state.update_view
+    if (
+        "sessions" not in st.session_state
+        or len(st.session_state.sessions) == 0
+        or ("update_view" in st.session_state and st.session_state.update_view)
     ):
         try:
-            sessions_req = requests.get(url="http://server:8000/session/all/preview")
+            sessions_req = requests.get(url="http://localhost:8000/session/all/preview")
             if sessions_req.status_code == 404:
-                st.info("you have no existing session \n start a new session !")
-                st.stop()
+                st.info("you have no existing session \n start a new session")
+                st.session_state.sessions = []
 
             elif sessions_req.status_code != 200:
                 logging.error(
@@ -58,7 +60,7 @@ with st.sidebar:
             active_session = None
             try:
                 message_req = requests.get(
-                    "http://server:8000/session/" + session["_id"]
+                    "http://localhost:8000/session/" + session["_id"]
                 )
 
                 if message_req.status_code == 404:
@@ -106,7 +108,7 @@ if prompt := st.chat_input("", key="chat", accept_file="multiple"):
     if st.session_state.session_id == "":
         try:
             new_session = requests.post(
-                url="http://server:8000/session/create",
+                url="http://localhost:8000/session/create",
                 json={
                     "session_id": "",
                     "message": {
@@ -136,7 +138,7 @@ if prompt := st.chat_input("", key="chat", accept_file="multiple"):
     with st.chat_message("user"):
         try:
             add_msg_response = requests.post(
-                url="http://server:8000/session/msg/" + st.session_state.session_id,
+                url="http://localhost:8000/session/msg/" + st.session_state.session_id,
                 json={
                     "role": "user",
                     "content": prompt.text,
@@ -161,7 +163,7 @@ if prompt := st.chat_input("", key="chat", accept_file="multiple"):
     with st.chat_message("assistant"):
         try:
             response = requests.post(
-                url="http://server:8000/agent/chat",
+                url="http://localhost:8000/agent/chat",
                 json={
                     "session_id": st.session_state.session_id,
                     "message": {
@@ -180,7 +182,7 @@ if prompt := st.chat_input("", key="chat", accept_file="multiple"):
                 st.stop()
 
             add_msg_response = requests.post(
-                url="http://server:8000/session/msg/" + st.session_state.session_id,
+                url="http://localhost:8000/session/msg/" + st.session_state.session_id,
                 json={
                     "role": "assistant",
                     "content": response.json()["msg"],
