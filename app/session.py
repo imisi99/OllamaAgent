@@ -26,7 +26,7 @@ async def create_session(
         + input["message"]["content"]
     )
 
-    response = get_llm().invoke(prompt)
+    response = get_llm().invoke(prompt, think=False)
     title = "The LLM did a bad job"
 
     logging.info(response)

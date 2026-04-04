@@ -25,16 +25,13 @@ with st.sidebar:
         st.session_state.chat_holder = random.randint(0, len(chat_holders) - 1)
         st.rerun()
 
-    if (
-        "sessions" not in st.session_state
-        or len(st.session_state.sessions) == 0
-        or ("update_view" in st.session_state and st.session_state.update_view)
+    if "sessions_fetched" not in st.session_state or st.session_state.get(
+        "update_view"
     ):
         try:
             sessions_req = requests.get(url="http://localhost:8000/session/all/preview")
             if sessions_req.status_code == 404:
                 st.info("you have no existing session \n start a new session")
-                st.session_state.sessions = []
 
             elif sessions_req.status_code != 200:
                 logging.error(
@@ -53,41 +50,42 @@ with st.sidebar:
             st.error(f"Failed to complete request to server -> {e}")
             st.stop()
 
+        st.session_state.sessions_fetched = True
         st.session_state.update_view = False
 
-    for session in reversed(st.session_state.sessions):
-        if st.button(session["name"], use_container_width=True):
-            active_session = None
-            try:
-                message_req = requests.get(
-                    "http://localhost:8000/session/" + session["_id"]
-                )
-
-                if message_req.status_code == 404:
-                    st.error("This session does not exist")
-                    st.stop()
-
-                elif message_req.status_code != 200:
-                    logging.error(
-                        f"Failed to fetch single sesion from db, status_code -> {message_req.status_code}, json -> {message_req.json()}"
+    if st.session_state.get("sessions"):
+        for session in reversed(st.session_state.sessions):
+            if st.button(session["name"], use_container_width=True):
+                active_session = None
+                try:
+                    message_req = requests.get(
+                        "http://localhost:8000/session/" + session["_id"]
                     )
-                    st.error("Failed to fetch session.")
+
+                    if message_req.status_code == 404:
+                        st.error("This session does not exist")
+                        st.stop()
+
+                    elif message_req.status_code != 200:
+                        logging.error(
+                            f"Failed to fetch single sesion from db, status_code -> {message_req.status_code}, json -> {message_req.json()}"
+                        )
+                        st.error("Failed to fetch session.")
+                        st.stop()
+                    else:
+                        active_session = message_req.json()["session"]
+
+                except Exception as e:
+                    logging.error(
+                        f"An error occured while making a request to the server -> {e}"
+                    )
+                    st.error(f"Failed to complete request to server -> {e}")
                     st.stop()
-                else:
-                    active_session = message_req.json()["session"]
 
-            except Exception as e:
-                logging.error(
-                    f"An error occured while making a request to the server -> {e}"
-                )
-                st.error(f"Failed to complete request to server -> {e}")
-                st.stop()
-
-            st.session_state.session_id = session["_id"]
-            st.session_state.chat_holder = -1
-            st.session_state.messages = active_session["messages"]
-            st.rerun()
-
+                st.session_state.session_id = session["_id"]
+                st.session_state.chat_holder = -1
+                st.session_state.messages = active_session["messages"]
+                st.rerun()
 
 if "chat_holder" not in st.session_state:
     st.session_state.chat_holder = random.randint(0, len(chat_holders) - 1)

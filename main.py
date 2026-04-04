@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import httpx
@@ -43,6 +44,8 @@ async def lifespan(app: FastAPI):
         agent_graph = agent.build_agent(agent.LLM, tools, system_prompt)
         agent.GRAPH = agent.build_graph(agent_graph)
 
+        worker = asyncio.create_task(qdrant.QDRANT_DATABASE.worker())
+
     except Exception as e:
         logging.error(
             "An error occured while trying startup app -> %s", e, exc_info=True
@@ -53,11 +56,16 @@ async def lifespan(app: FastAPI):
         base_url = os.getenv("OLLAMA_BASE_URL", "")
         await client.post(
             f"{base_url}/api/chat",
-            json={"model": "qwen2.5-coder", "keep_alive": 0},
+            json={"model": "qwen3.5:4b", "keep_alive": 0},
         )
     await (
         qdrant.QDRANT_DATABASE.finish_queue()
     ) if qdrant.QDRANT_DATABASE is not None else None
+    worker.cancel()
+    try:
+        await worker
+    except asyncio.CancelledError:
+        pass
     redis.REDIS_DATABASE.clear_all_memory() if redis.REDIS_DATABASE is not None else None
     qdrant.QDRANT_CLIENT.close() if qdrant.QDRANT_CLIENT is not None else None
     mongo.MONGO_CLIENT.close() if mongo.MONGO_CLIENT is not None else None
