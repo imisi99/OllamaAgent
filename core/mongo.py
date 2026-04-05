@@ -18,6 +18,7 @@ class Database:
     def create_session(self, session: Session) -> tuple[bool, str]:
         result = self.session_collection.insert_one(
             {
+                "uuid": session["uuid"],
                 "name": session["name"],
                 "created_at": session["created_at"],
                 "messages": session["messages"],
@@ -43,6 +44,7 @@ class Database:
 
             session: Session = {
                 "_id": str(result["_id"]),
+                "uuid": result["uuid"],
                 "name": result["name"],
                 "messages": message,
                 "created_at": result["created_at"],
@@ -74,6 +76,7 @@ class Database:
             result.append(
                 {
                     "_id": str(session["_id"]),
+                    "uuid": session["uuid"],
                     "name": session["name"],
                     "created_at": session["created_at"],
                     "messages": message,
@@ -97,6 +100,7 @@ class Database:
             result.append(
                 {
                     "_id": str(session["_id"]),
+                    "uuid": session["uuid"],
                     "name": session["name"],
                     "created_at": session["created_at"],
                     "messages": message,
@@ -126,6 +130,7 @@ class Database:
             result.append(
                 {
                     "_id": str(session["_id"]),
+                    "uuid": session["uuid"],
                     "name": session["name"],
                     "created_at": session["created_at"],
                     "messages": message,

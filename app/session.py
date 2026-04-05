@@ -1,15 +1,16 @@
 import logging
 from datetime import datetime
+from uuid import uuid4
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import JSONResponse
 
-from core.agent import get_llm
+from core.agent import generate_title
 from core.mongo import Database
-from core.qdrant import Qdrant
+from core.qdrant import Job, Qdrant, Task
 from db.mongo import get_mongo_database
 from db.qdrant import get_qdrant_database
 from schemas.agent import SessionConversation
-from schemas.mongo import Message
+from schemas.mongo import Message, Session
 
 session = APIRouter()
 
@@ -19,36 +20,37 @@ session = APIRouter()
 
 @session.post("/session/create")
 async def create_session(
-    input: SessionConversation, db: Database = Depends(get_mongo_database)
+    input: SessionConversation,
+    db: Database = Depends(get_mongo_database),
+    qdb: Qdrant = Depends(get_qdrant_database),
 ):
-    prompt = (
-        "Generate a casual title for a chat session not more than 5 words using the user first input. You respond should be the title ONLY (one title) without the string quote an example is \n Explaining Docker Compose \n \n\n\n"
-        + input["message"]["content"]
-    )
+    try:
+        title = generate_title(input["message"]["content"])
+        uid = str(uuid4())
 
-    response = get_llm().invoke(prompt, think=False)
-    title = "The LLM did a bad job"
-
-    logging.info(response)
-
-    if isinstance(response.content, str):
-        title = response.content
-
-    created, id = db.create_session(
-        {
+        sess: Session = {
             "_id": "",
+            "uuid": uid,
             "messages": [],
             "created_at": datetime.now().isoformat(),
             "name": title,
         }
-    )
+        created, id = db.create_session(sess)
 
-    if not created:
-        raise HTTPException(
-            status_code=500, detail={"msg": "Failed to create the session."}
+        if not created:
+            return JSONResponse(
+                status_code=500, content={"msg": "Failed to create the session."}
+            )
+
+        qdb.add_job(Task(job=Job.CREATE_POINT, session=sess))
+
+    except Exception as e:
+        logging.error(f"Failed to create session, An error occured -> {e}")
+        return JSONResponse(
+            status_code=500, content={"msg": "Failed to create the session"}
         )
 
-    return JSONResponse(status_code=200, content={"id": id})
+    return JSONResponse(status_code=200, content={"id": id, "uid": uid})
 
 
 @session.post("/session/msg/{session_id}")
@@ -60,10 +62,10 @@ async def add_message(
 ):
     created = db.add_messages(session_id, message)
     if not created:
-        raise HTTPException(
-            status_code=500, detail={"msg": "Failed to add message to session."}
+        return JSONResponse(
+            status_code=500, content={"msg": "Failed to add message to session."}
         )
-    qdb.add_job(session_id, message)
+    qdb.add_job(Task(job=Job.UPDATE_POINT, uid="", message=message))
     return JSONResponse(status_code=200, content={"msg": "Message added."})
 
 
@@ -97,11 +99,17 @@ async def fetch_single_session(
 
 
 @session.delete("/session/delete/{session_id}")
-async def delete_session(session_id: str, db: Database = Depends(get_mongo_database)):
+async def delete_session(
+    session_id: str,
+    db: Database = Depends(get_mongo_database),
+    qdb: Qdrant = Depends(get_qdrant_database),
+):
     deleted = db.delete_session(session_id)
     if not deleted:
-        raise HTTPException(
-            status_code=500, detail={"msg": "Failed to delete the session."}
+        return JSONResponse(
+            status_code=500, content={"msg": "Failed to delete the session."}
         )
+
+    qdb.delete_point(session_id)
 
     return JSONResponse(status_code=200, content={"msg": "Session deleted."})

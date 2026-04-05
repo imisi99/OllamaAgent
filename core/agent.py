@@ -16,6 +16,7 @@ GRAPH: Optional[CompiledStateGraph[SessionState, None, SessionState, SessionStat
     None
 )
 LLM: Optional[ChatOllama] = None
+LLM_NO_REASONING: Optional[ChatOllama] = None
 
 
 def get_graph() -> CompiledStateGraph[SessionState, None, SessionState, SessionState]:
@@ -24,10 +25,14 @@ def get_graph() -> CompiledStateGraph[SessionState, None, SessionState, SessionS
     return GRAPH
 
 
-def get_llm() -> ChatOllama:
-    if LLM is None:
+def get_llm_no_reasoning() -> ChatOllama:
+    if LLM_NO_REASONING is None:
         raise RuntimeError("The LLM has not been initialized")
-    return LLM
+    return LLM_NO_REASONING
+
+
+def log_llm_response(response, label: str = "LLM"):
+    reasoning = response
 
 
 def summarize_messages(llm: ChatOllama, messages: list[Message]) -> str | None:
@@ -51,6 +56,22 @@ def summarize_messages(llm: ChatOllama, messages: list[Message]) -> str | None:
         return response.content
 
     return None
+
+
+def generate_title(content: str) -> str:
+    prompt = (
+        "Generate a casual title for a chat session not more than 5 words using the user first input. You respond should be the title ONLY (one title) without the string quote an example is \n Explaining Docker Compose \n \n\n\n"
+        + content
+    )
+    title = "Untitled Session"
+
+    try:
+        response = get_llm_no_reasoning().invoke(prompt)
+        if isinstance(response.content, str):
+            title = response.content
+    except Exception as e:
+        logging.error(f"Failed to generate title -> {e}")
+    return title
 
 
 def build_agent(llm: ChatOllama, tools: list, prompt: SystemMessage):

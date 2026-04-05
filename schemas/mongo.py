@@ -1,4 +1,3 @@
-from datetime import datetime
 from typing import Any, TypedDict
 
 
@@ -10,6 +9,7 @@ class Message(TypedDict):
 
 class Session(TypedDict):
     _id: str
+    uuid: str
     name: str
     created_at: str
     messages: list[Message]

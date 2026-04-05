@@ -1,6 +1,7 @@
 import asyncio
 import logging
-from typing import cast
+from enum import Enum
+from typing import Union, cast
 from qdrant_client import QdrantClient
 from qdrant_client.models import PointStruct
 from qdrant_client.http.models import UpdateStatus
@@ -8,22 +9,44 @@ from .emb import EmbeddingModel
 from schemas.mongo import Message, Session
 
 
+class Job(int, Enum):
+    CREATE_POINT = 0
+    UPDATE_POINT = 1
+
+
+class Task:
+    def __init__(
+        self,
+        job: Job,
+        uid: str = "",
+        session: Union[Session, None] = None,
+        message: Union[Message, None] = None,
+        retries: int = 3,
+    ) -> None:
+        self.uid = uid
+        self.job = job
+        self.session = session
+        self.message = message
+        self.retries = retries
+
+
 class Qdrant:
     def __init__(self, client: QdrantClient, embedding: EmbeddingModel) -> None:
         self.client = client
         self.embedding = embedding
-        self.jobs: asyncio.Queue[tuple[str, Message]] = asyncio.Queue()
+        self.jobs: asyncio.Queue[Task] = asyncio.Queue()
 
-    def create_point(self, id: str, session: Session) -> bool:
+    def create_point(self, session: Session) -> bool:
         vector = self.embedding.generate_vector_embedding(session)
         result = self.client.upsert(
             collection_name="chats",
             points=[
                 PointStruct(
-                    id=id,
+                    id=session["uuid"],
                     vector={"description": vector},
                     payload={
                         "id": session["_id"],
+                        "uuid": session["uuid"],
                         "title": session["name"],
                         "message": session["messages"],
                         "created_at": session["created_at"],
@@ -35,7 +58,7 @@ class Qdrant:
         success = result.status in (UpdateStatus.COMPLETED, UpdateStatus.ACKNOWLEDGED)
         if not success:
             logging.error(
-                f"Failed to create session with id -> {id} result -> {result}"
+                f"Failed to create session with id -> {session['uuid']} result -> {result}"
             )
         return success
 
@@ -91,6 +114,7 @@ class Qdrant:
             if payload is not None:
                 session: Session = {
                     "_id": payload["id"],
+                    "uuid": payload["uuid"],
                     "created_at": payload["created_at"],
                     "name": payload["name"],
                     "messages": payload["messages"],
@@ -161,17 +185,23 @@ class Qdrant:
                 f"Failed to update session with id -> {id} result -> {result}, status -> {result.status}"
             )
 
-    def add_job(self, session_id: str, message: Message):
-        self.jobs.put_nowait((session_id, message))
+    def add_job(self, task: Task):
+        self.jobs.put_nowait(task)
 
     async def worker(self):
         MAX_ATTEMPTS = 3
         while True:
             try:
-                session_id, message = await self.jobs.get()
-                for attempts in range(MAX_ATTEMPTS):
+                task = await self.jobs.get()
+                for attempts in range(task.retries):
                     try:
-                        self._update_point(session_id, message)
+                        match task.job:
+                            case Job.CREATE_POINT:
+                                self.create_point(cast(Session, task.session))
+                            case Job.UPDATE_POINT:
+                                self._update_point(
+                                    task.uid, cast(Message, task.message)
+                                )
                         break
                     except Exception as e:
                         if attempts < MAX_ATTEMPTS - 1:
@@ -181,7 +211,7 @@ class Qdrant:
                             await asyncio.sleep(1.5 * attempts)
                         else:
                             logging.error(
-                                f"[qdrant worker] all retries exhausted for session -> {session_id}, err -> {e}"
+                                f"[qdrant worker] all retries exhausted for session -> {task.uid}, err -> {e}"
                             )
 
             finally:
