@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
-from core.agent import get_graph, get_llm
+from core.agent import get_graph, get_llm_no_reasoning
 from schemas.agent import SessionConversation, SessionState
 
 serve = APIRouter()
@@ -11,7 +11,8 @@ serve = APIRouter()
 def chat_agent(input: SessionConversation):
     session = SessionState(
         {
-            "llm": get_llm(),
+            "user_id": input["user_id"],
+            "llm": get_llm_no_reasoning(),
             "message": input["message"],
             "session_id": input["session_id"],
             "response": "",

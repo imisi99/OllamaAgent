@@ -13,6 +13,26 @@ chat_holders = [
     "Back at it again !",
 ]
 
+if "user_id" not in st.session_state:
+    try:
+        user_req = requests.get(url="http://server:8000/user")
+
+        if user_req.status_code == 200:
+            st.session_state.user_id = user_req.json()["id"]
+            st.rerun()
+        elif user_req.status_code == 404:
+            st.info(user_req.json()["msg"])
+            if prompt := st.chat_input("Create a new user"):
+                pass
+        else:
+            st.error("Failed to retrieve user.")
+            st.stop()
+
+    except Exception as e:
+        logging.error(f"An error occured while making a request to the server -> {e}")
+        st.error(f"Failed to complete request to server -> {e}")
+        st.stop()
+
 
 with st.sidebar:
     if st.button(
@@ -21,6 +41,7 @@ with st.sidebar:
         type="tertiary",
     ):
         st.session_state.session_id = ""
+        st.session_state.session_uid = ""
         st.session_state.messages = []
         st.session_state.chat_holder = random.randint(0, len(chat_holders) - 1)
         st.rerun()
@@ -34,9 +55,6 @@ with st.sidebar:
                 st.info("you have no existing session \n start a new session")
 
             elif sessions_req.status_code != 200:
-                logging.error(
-                    f"Failed to fetch available sessions from db, status_code -> {sessions_req.status_code}, json -> {sessions_req.json()}"
-                )
                 st.error("Failed to fetch sessions.")
                 st.stop()
 
@@ -63,13 +81,10 @@ with st.sidebar:
                     )
 
                     if message_req.status_code == 404:
-                        st.error("This session does not exist")
+                        st.error(message_req.json()["msg"])
                         st.stop()
 
                     elif message_req.status_code != 200:
-                        logging.error(
-                            f"Failed to fetch single sesion from db, status_code -> {message_req.status_code}, json -> {message_req.json()}"
-                        )
                         st.error("Failed to fetch session.")
                         st.stop()
                     else:
@@ -83,6 +98,7 @@ with st.sidebar:
                     st.stop()
 
                 st.session_state.session_id = session["_id"]
+                st.session_state.session_uid = session["uuid"]
                 st.session_state.chat_holder = -1
                 st.session_state.messages = active_session["messages"]
                 st.rerun()
@@ -95,6 +111,7 @@ if st.session_state.chat_holder != -1:
 
 if "session_id" not in st.session_state:
     st.session_state.session_id = ""
+    st.session_state.session_uid = ""
     st.session_state.messages = []
 
 if "messages" in st.session_state:
@@ -118,9 +135,6 @@ if prompt := st.chat_input("", key="chat", accept_file="multiple"):
             )
 
             if new_session.status_code != 200:
-                logging.error(
-                    f"Failed to create a new session, status_code -> {new_session.status_code}, json -> {new_session.json()}"
-                )
                 st.error("Failed to start a new session.")
                 st.stop()
         except Exception as e:
@@ -130,13 +144,17 @@ if prompt := st.chat_input("", key="chat", accept_file="multiple"):
             st.error(f"Failed to complete request to server -> {e}")
             st.stop()
         st.session_state.session_id = new_session.json()["id"]
+        st.session_state.session_uid = new_session.json()["uid"]
         st.session_state.chat_holder = -1
         st.session_state.update_view = True
 
     with st.chat_message("user"):
         try:
             add_msg_response = requests.post(
-                url="http://server:8000/session/msg/" + st.session_state.session_id,
+                url="http://server:8000/session/msg/"
+                + st.session_state.session_id
+                + "/"
+                + st.session_state.session_uid,
                 json={
                     "role": "user",
                     "content": prompt.text,
@@ -164,6 +182,7 @@ if prompt := st.chat_input("", key="chat", accept_file="multiple"):
                 url="http://server:8000/agent/chat",
                 json={
                     "session_id": st.session_state.session_id,
+                    "user_id": st.session_state.user_id,
                     "message": {
                         "role": "user",
                         "content": prompt.text,
@@ -173,14 +192,14 @@ if prompt := st.chat_input("", key="chat", accept_file="multiple"):
             )
 
             if response.status_code != 200:
-                logging.error(
-                    f"An error occured while trying to chat with agent, status_code -> {response.status_code}, json -> {response.json()}"
-                )
                 st.error("Failed to communicate with agent.")
                 st.stop()
 
             add_msg_response = requests.post(
-                url="http://server:8000/session/msg/" + st.session_state.session_id,
+                url="http://server:8000/session/msg/"
+                + st.session_state.session_id
+                + "/"
+                + st.session_state.session_uid,
                 json={
                     "role": "assistant",
                     "content": response.json()["msg"],
@@ -205,5 +224,5 @@ if prompt := st.chat_input("", key="chat", accept_file="multiple"):
         {"role": "assistant", "content": response.json()["msg"]}
     )
 
-    if "update_view" in st.session_state and st.session_state.update_view:
+    if st.session_state.get("update_view"):
         st.rerun()

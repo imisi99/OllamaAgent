@@ -40,6 +40,23 @@ def save_insight_about_user(user_id: str, key: str, value: Any) -> str:
 
 
 @tool(parse_docstring=True)
+def remove_insight_about_user(user_id: str, key: str) -> str:
+    """
+    This removes information about the user or things that you've noticed about the user
+    The memory is of type dict[str, Any] so a key is needed for the insight to remove
+    You can view the current state using get_user_info.
+
+    Args:
+        user_id: This is the user id.
+        key: The key of the value to remove.
+    """
+    removed = get_mongo_database().remove_user_memory(user_id, key)
+    if not removed:
+        return "Operation was unsuccessful"
+    return "Operation was successful"
+
+
+@tool(parse_docstring=True)
 def web_search(query: str, max_results: int = 5) -> list[dict]:
     """
     This make a web search using the query and max results (The max results defaults to 5)
@@ -62,7 +79,7 @@ def web_search(query: str, max_results: int = 5) -> list[dict]:
 
 # TODO: Also allow for the model to choose to summarize the chat ?
 @tool(parse_docstring=True)
-def find_related_sessions(
+async def find_related_sessions(
     session_id: str,
     query: str = "",
     use_query: bool = False,
@@ -80,7 +97,7 @@ def find_related_sessions(
         score_threshold: This is the threshold for the similarity score (this defaults to 50.0)
         limit: This is the limit for the number of sessions to retrieve it might retrieve lower than the limit if few document pass the threshold (this defaults to 2)
     """
-    result = get_qdrant_database().get_related_points(
+    result = await get_qdrant_database().get_related_points(
         session_id, query, score_threshold, use_query, limit
     )
 
@@ -90,4 +107,10 @@ def find_related_sessions(
     return f"Found {len(points)} chats {points} with an average score of {score}"
 
 
-tools = [get_user_info, save_insight_about_user, web_search, find_related_sessions]
+tools = [
+    get_user_info,
+    save_insight_about_user,
+    web_search,
+    find_related_sessions,
+    remove_insight_about_user,
+]

@@ -2,7 +2,7 @@ import asyncio
 import logging
 import os
 import httpx
-from langchain_ollama import ChatOllama
+from langchain_ollama import ChatOllama, OllamaEmbeddings
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from core.tools import tools
@@ -24,7 +24,6 @@ async def lifespan(app: FastAPI):
         mongo.MONGO_CLIENT = mongo.connect_mongo()
         redis.REDIS_CLIENT = redis.connect_redis()
 
-        emb.EMB_MODEL = emb.create_emb_model()
         mongo.MONGO_DATABASE = mongo.create_mongo_database()
         qdrant.QDRANT_DATABASE = qdrant.create_qdrant_database(emb.get_emb_model())
         redis.REDIS_DATABASE = redis.create_redis_database(
@@ -48,6 +47,10 @@ async def lifespan(app: FastAPI):
             reasoning=False,
             verbose=True,
         )
+        embed = OllamaEmbeddings(
+            model="nomic-embed-text", base_url=OLLAMA_BASE_URL, keep_alive=-1
+        )
+        emb.EMB_MODEL = emb.create_emb_model(embed)
         agent_graph = agent.build_agent(agent.LLM, tools, system_prompt)
         agent.GRAPH = agent.build_graph(agent_graph)
 
@@ -64,6 +67,11 @@ async def lifespan(app: FastAPI):
         await client.post(
             f"{base_url}/api/chat",
             json={"model": "qwen3.5:4b", "keep_alive": 0},
+        )
+
+        await client.post(
+            f"{base_url}/api/embeddings",
+            json={"model": "nomic-embed-text", "keep_alive": 0},
         )
     await (
         qdrant.QDRANT_DATABASE.finish_queue()

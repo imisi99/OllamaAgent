@@ -1,36 +1,29 @@
 import json
-import os
+from langchain_ollama import OllamaEmbeddings
 from typing import Optional
-import requests
 
 from schemas.mongo import Session
 
 
 class EmbeddingModel:
-    def __init__(self) -> None:
-        self.base_url = os.getenv("OLLAMA_BASE_URL", "")
+    def __init__(self, emb_model: OllamaEmbeddings) -> None:
+        self.EMB_MODEL = emb_model
 
-    def generate_vector_embedding(self, session: Session) -> list[float]:
-        response = requests.post(
-            self.base_url,
-            json={"model": "nomic-embed-text", "prompt": json.dumps(session)},
-        )
-        response.raise_for_status()
-        return response.json()["embedding"]
+    async def generate_vector_embedding(self, session: Session) -> list[float]:
+        text = json.dumps(session)
+        vector = await self.EMB_MODEL.aembed_query(text)
+        return vector
 
-    def generate_vector_embedding_query(self, query: str) -> list[float]:
-        response = requests.post(
-            self.base_url, json={"model": "nomic-embed-text", "prompt": query}
-        )
-        response.raise_for_status()
-        return response.json()["embedding"]
+    async def generate_vector_embedding_query(self, query: str) -> list[float]:
+        vector = await self.EMB_MODEL.aembed_query(query)
+        return vector
 
 
 EMB_MODEL: Optional[EmbeddingModel] = None
 
 
-def create_emb_model() -> EmbeddingModel:
-    model = EmbeddingModel()
+def create_emb_model(emb_model: OllamaEmbeddings) -> EmbeddingModel:
+    model = EmbeddingModel(emb_model)
     return model
 
 

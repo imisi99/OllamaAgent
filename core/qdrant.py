@@ -9,9 +9,10 @@ from .emb import EmbeddingModel
 from schemas.mongo import Message, Session
 
 
-class Job(int, Enum):
-    CREATE_POINT = 0
-    UPDATE_POINT = 1
+class Job(str, Enum):
+    CREATE_POINT = "create point"
+    UPDATE_POINT = "update point"
+    DELETE_POINT = "delete point"
 
 
 class Task:
@@ -36,8 +37,8 @@ class Qdrant:
         self.embedding = embedding
         self.jobs: asyncio.Queue[Task] = asyncio.Queue()
 
-    def create_point(self, session: Session) -> bool:
-        vector = self.embedding.generate_vector_embedding(session)
+    async def create_point(self, session: Session) -> bool:
+        vector = await self.embedding.generate_vector_embedding(session)
         result = self.client.upsert(
             collection_name="chats",
             points=[
@@ -62,7 +63,7 @@ class Qdrant:
             )
         return success
 
-    def get_related_points(
+    async def get_related_points(
         self,
         id: str,
         query: str,
@@ -72,7 +73,7 @@ class Qdrant:
     ) -> tuple[list[tuple[Session, float]], float] | None:
         vector = None
         if use_query:
-            vector = self.embedding.generate_vector_embedding_query(query)
+            vector = await self.embedding.generate_vector_embedding_query(query)
         else:
             point = self.client.retrieve(
                 collection_name="chats", ids=[id], with_vectors=True
@@ -144,7 +145,7 @@ class Qdrant:
             logging.error(f"Failed to delete point with id -> {id} result -> {result}")
         return success
 
-    def _update_point(self, id: str, message: Message):
+    async def _update_point(self, id: str, message: Message):
         point = self.client.retrieve("chats", ids=[id], with_payload=True)
         if not point:
             logging.error(
@@ -162,7 +163,7 @@ class Qdrant:
         payload["messages"].append(message)
         session = cast(Session, payload)
 
-        vector = self.embedding.generate_vector_embedding(session)
+        vector = await self.embedding.generate_vector_embedding(session)
         result = self.client.upsert(
             collection_name="chats",
             points=[
@@ -197,21 +198,23 @@ class Qdrant:
                     try:
                         match task.job:
                             case Job.CREATE_POINT:
-                                self.create_point(cast(Session, task.session))
+                                await self.create_point(cast(Session, task.session))
                             case Job.UPDATE_POINT:
-                                self._update_point(
+                                await self._update_point(
                                     task.uid, cast(Message, task.message)
                                 )
+                            case Job.DELETE_POINT:
+                                self.delete_point(task.uid)
                         break
                     except Exception as e:
                         if attempts < MAX_ATTEMPTS - 1:
                             logging.error(
-                                f"[qdrant worker] attempt {attempts + 1} failed, retrying... error -> {e}"
+                                f"[qdrant worker] attempt {attempts + 1} failed running job -> {task.job.value}, retrying... error -> {e}"
                             )
                             await asyncio.sleep(1.5 * attempts)
                         else:
                             logging.error(
-                                f"[qdrant worker] all retries exhausted for session -> {task.uid}, err -> {e}"
+                                f"[qdrant worker] all retries exhausted for job -> {task.job.value} session -> {task.uid}, err -> {e}"
                             )
 
             finally:

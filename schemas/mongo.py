@@ -16,5 +16,6 @@ class Session(TypedDict):
 
 
 class User(TypedDict):
+    _id: str
     name: str
     memory: dict[str, Any]

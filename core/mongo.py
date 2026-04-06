@@ -89,7 +89,7 @@ class Database:
         sessions = []
 
         with self.session_collection.find(
-            {"_id": 1, "name": 1, "created_at": 1}
+            filter={}, projection={"messages": False, "created_at": False}
         ) as cursor:
             for doc in cursor:
                 sessions.append(doc)
@@ -102,7 +102,7 @@ class Database:
                     "_id": str(session["_id"]),
                     "uuid": session["uuid"],
                     "name": session["name"],
-                    "created_at": session["created_at"],
+                    "created_at": "",
                     "messages": message,
                 }
             )
@@ -151,6 +151,26 @@ class Database:
 
         return result.acknowledged
 
+    def create_user(self, username: str) -> tuple[str, bool]:
+        result = self.user_collection.insert_one(
+            {
+                "name": username,
+                "memory": {},
+            }
+        )
+        if not result.acknowledged:
+            return "", False
+
+        return str(result.inserted_id), True
+
+    def fetch_user_id(self) -> str | None:
+        with self.user_collection.find(
+            filter={}, projection={"memory": False}
+        ) as cursor:
+            for user in cursor:
+                return str(user["_id"])
+        return None
+
     def fetch_user(self, user_id: str) -> User | None:
         result = self.user_collection.find_one({"_id": ObjectId(user_id)})
         if result is not None:
@@ -160,9 +180,24 @@ class Database:
 
         return None
 
+    def update_user_name(self, user_id: str, name: str) -> bool:
+        result = self.user_collection.update_one(
+            {"_id": ObjectId(user_id)}, {"name": name}
+        )
+
+        if result.modified_count == 0:
+            return False
+
+        return result.acknowledged
+
     def update_user_memory(self, user_id: str, key: str, value: Any) -> bool:
         result = self.user_collection.update_one(
             {"_id": ObjectId(user_id)}, {"$set": {f"memory.{key}": value}}
         )
+        return result.acknowledged
 
+    def remove_user_memory(self, user_id: str, key: str) -> bool:
+        result = self.user_collection.update_one(
+            {"_id": ObjectId(user_id)}, {"$unset": {f"memory.{key}": ""}}
+        )
         return result.acknowledged

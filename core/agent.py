@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime
 from typing import Optional
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.prompts import ChatPromptTemplate
@@ -7,7 +8,6 @@ from langchain.agents import create_agent
 from langgraph.graph import StateGraph, END
 from langgraph.graph.state import CompiledStateGraph
 from db.redis import get_redis_database
-from datetime import datetime
 from schemas.agent import SessionState
 from schemas.mongo import Message
 
@@ -31,8 +31,32 @@ def get_llm_no_reasoning() -> ChatOllama:
     return LLM_NO_REASONING
 
 
+def get_llm_reasoniing() -> ChatOllama:
+    if LLM is None:
+        raise RuntimeError("The LLM has not been initialized")
+    return LLM
+
+
 def log_llm_response(response, label: str = "LLM"):
-    reasoning = response
+    reasoning = response.additional_kwargs.get("reasoning_content", None)
+    content = response.content
+    metadata = response.response_metadata
+
+    if reasoning:
+        logging.info(f"[{label}] THINKING: \n {reasoning}")
+
+    if isinstance(content, str):
+        logging.info(f"[{label}] RESPONSE: {content}")
+    elif isinstance(content, list):
+        for block in content:
+            if isinstance(block, dict) and block.get("type") == "text":
+                logging.info(f"[{label}] RESPONSE: {block['text']}")
+
+    logging.info(
+        f"[{label}] TOKENS -> input: {metadata.get('prompt_eval_count')} "
+        f"output: {metadata.get('eval_count')} "
+        f"total_duration: {metadata.get('total_duration', 0) / 1e9:.3f}s"
+    )
 
 
 def summarize_messages(llm: ChatOllama, messages: list[Message]) -> str | None:
@@ -49,9 +73,7 @@ def summarize_messages(llm: ChatOllama, messages: list[Message]) -> str | None:
 
     chain = prompt | llm
     response = chain.invoke({})
-    logging.info(response)
-    logging.info(response.content)
-    print(type(response.content))
+    log_llm_response(response, "SUMMARIZER")
     if isinstance(response.content, str):
         return response.content
 
@@ -67,6 +89,7 @@ def generate_title(content: str) -> str:
 
     try:
         response = get_llm_no_reasoning().invoke(prompt)
+        log_llm_response(response, "TITLEGEN")
         if isinstance(response.content, str):
             title = response.content
     except Exception as e:
@@ -124,10 +147,14 @@ def build_graph(agent):
 
         # TODO: Use a check for the token emitting for streaming messages with a check on the final output if it isn't then redisplay
         response = agent.invoke(
-            {"session_id": state["session_id"], "messages": messages}
+            {
+                "session_id": state["session_id"],
+                "user_id": state["user_id"],
+                "messages": messages,
+            }
         )
 
-        logging.info(response)
+        log_llm_response(response, "AGENT")
 
         get_redis_database().add_short_term_memory(
             session_id,
