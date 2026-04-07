@@ -8,6 +8,7 @@ class SessionConversation(TypedDict):
     user_id: str
     session_id: str
     message: Message
+    ghost_session: bool
 
 
 class SessionState(SessionConversation):

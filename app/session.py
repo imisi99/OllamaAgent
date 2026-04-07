@@ -3,13 +3,13 @@ from datetime import datetime
 from uuid import uuid4
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
+from starlette import status
 
 from core.agent import generate_title
 from core.mongo import Database
 from core.qdrant import Job, Qdrant, Task
 from db.mongo import get_mongo_database
 from db.qdrant import get_qdrant_database
-from schemas.agent import SessionConversation
 from schemas.mongo import Message, Session
 
 session = APIRouter()
@@ -17,12 +17,12 @@ session = APIRouter()
 
 @session.post("/session/create")
 async def create_session(
-    input: SessionConversation,
+    prompt: str,
     db: Database = Depends(get_mongo_database),
     qdb: Qdrant = Depends(get_qdrant_database),
 ):
     try:
-        title = generate_title(input["message"]["content"])
+        title = generate_title(prompt)
         uid = str(uuid4())
 
         sess: Session = {
@@ -35,22 +35,50 @@ async def create_session(
         created, id = db.create_session(sess)
 
         if not created:
-            return JSONResponse(
-                status_code=500, content={"msg": "Failed to create the session."}
-            )
+            raise Exception("MongoDB operation to create session was not acknowledged")
 
         qdb.add_job(Task(job=Job.CREATE_POINT, session=sess))
+
+        return JSONResponse(
+            status_code=status.HTTP_201_CREATED, content={"id": id, "uid": uid}
+        )
 
     except Exception as e:
         logging.error(f"Failed to create session, An error occured -> {e}")
         return JSONResponse(
-            status_code=500, content={"msg": "Failed to create the session."}
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"msg": "Failed to create the session."},
         )
 
-    return JSONResponse(status_code=200, content={"id": id, "uid": uid})
+
+@session.put("/session/rename/{session_id}/{session_uid}")
+async def rename(
+    session_id: str,
+    name: str,
+    db: Database = Depends(get_mongo_database),
+    qdb: Qdrant = Depends(get_qdrant_database),
+):
+    try:
+        updated = db.rename_session(session_id, name)
+        if not updated:
+            raise Exception("MongoDB operation to rename session not acknowledged.")
+
+        qdb.add_job(Task(job=Job.UPDATE_PAYLOAD, name=name))
+
+        return JSONResponse(
+            status_code=status.HTTP_202_ACCEPTED,
+            content={"msg": "Session renamed successfully."},
+        )
+
+    except Exception as e:
+        logging.error(f"Failed to rename session, An errro occured -> {e}")
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"msg": "Failed to rename the session."},
+        )
 
 
-@session.post("/session/msg/{session_id}/{session_uid}")
+@session.put("/session/msg/{session_id}/{session_uid}")
 async def add_message(
     message: Message,
     session_id: str,
@@ -61,20 +89,22 @@ async def add_message(
     try:
         created = db.add_messages(session_id, message)
         if not created:
-            return JSONResponse(
-                status_code=500, content={"msg": "Failed to add message to session."}
-            )
+            raise Exception("MongoDB operation to add message was not acknowledged")
 
         qdb.add_job(Task(job=Job.UPDATE_POINT, uid=session_uid, message=message))
+
+        return JSONResponse(
+            status_code=status.HTTP_202_ACCEPTED, content={"msg": "Message added."}
+        )
+
     except Exception as e:
         logging.error(
             f"Failed to add message for session -> {session_id}, An error occured -> {e}"
         )
         return JSONResponse(
-            status_code=500, content={"msg": "Failed to add message to session."}
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"msg": "Failed to add message to session."},
         )
-
-    return JSONResponse(status_code=200, content={"msg": "Message added."})
 
 
 @session.get("/session/all/preview")
@@ -83,23 +113,42 @@ async def fetch_all_session_preview(db: Database = Depends(get_mongo_database)):
         sessions = db.fetch_all_session_preview()
         if sessions is None or len(sessions) == 0:
             return JSONResponse(
-                status_code=404, content={"msg": "No session created yet."}
+                status_code=status.HTTP_404_NOT_FOUND,
+                content={"msg": "No session created yet."},
             )
+
+        return JSONResponse(
+            status_code=status.HTTP_200_OK, content={"sessions": sessions}
+        )
+
     except Exception as e:
         logging.error(f"Failed to retrieve sessions for preview -> {e}")
         return JSONResponse(
-            status_code=500, content={"msg": "Failed to fetch sessions."}
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"msg": "Failed to fetch sessions."},
         )
-
-    return JSONResponse(status_code=200, content={"sessions": sessions})
 
 
 @session.get("/session/all")
 async def fetch_all_session(db: Database = Depends(get_mongo_database)):
-    sessions = db.fetch_all_session()
-    if sessions is None or len(sessions) == 0:
-        return JSONResponse(status_code=404, content={"msg": "No session created yet."})
-    return JSONResponse(status_code=200, content={"sessions": sessions})
+    try:
+        sessions = db.fetch_all_session()
+        if sessions is None or len(sessions) == 0:
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content={"msg": "No session created yet."},
+            )
+
+        return JSONResponse(
+            status_code=status.HTTP_200_OK, content={"sessions": sessions}
+        )
+
+    except Exception as e:
+        logging.error(f"Failed to retrieve sessions -> {e}")
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"msg": "Failed to fetch sessions."},
+        )
 
 
 @session.get("/session/{session_id}")
@@ -110,16 +159,20 @@ async def fetch_single_session(
         s_session = db.fetch_session(session_id)
         if s_session is None:
             return JSONResponse(
-                status_code=404,
+                status_code=status.HTTP_404_NOT_FOUND,
                 content={"msg": f"Session with id -> {session_id} not found."},
             )
+
+        return JSONResponse(
+            status_code=status.HTTP_200_OK, content={"session": s_session}
+        )
+
     except Exception as e:
         logging.error(f"Failed to retrieve session -> {e}")
         return JSONResponse(
-            status_code=500, content={"msg": "Failed to fetch session."}
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"msg": "Failed to fetch session."},
         )
-
-    return JSONResponse(status_code=200, content={"session": s_session})
 
 
 @session.delete("/session/delete/{session_id}/{session_uid}")
@@ -129,12 +182,20 @@ async def delete_session(
     db: Database = Depends(get_mongo_database),
     qdb: Qdrant = Depends(get_qdrant_database),
 ):
-    deleted = db.delete_session(session_id)
-    if not deleted:
+    try:
+        deleted = db.delete_session(session_id)
+        if not deleted:
+            raise Exception("MongoDB operation to delete session was not acknowledged.")
+
+        qdb.add_job(Task(uid=session_uid, job=Job.DELETE_POINT))
+
         return JSONResponse(
-            status_code=500, content={"msg": "Failed to delete the session."}
+            status_code=status.HTTP_204_NO_CONTENT, content={"msg": "Session deleted."}
         )
 
-    qdb.add_job(Task(uid=session_uid, job=Job.DELETE_POINT))
-
-    return JSONResponse(status_code=200, content={"msg": "Session deleted."})
+    except Exception as e:
+        logging.error(f"Failed to delete session with id -> {session_id}, error -> {e}")
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"msg": "Failed to delete the session."},
+        )

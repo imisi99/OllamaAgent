@@ -82,7 +82,7 @@ def summarize_messages(llm: ChatOllama, messages: list[Message]) -> str | None:
 
 def generate_title(content: str) -> str:
     prompt = (
-        "Generate a casual title for a chat session not more than 5 words using the user first input. You respond should be the title ONLY (one title) without the string quote an example is \n Explaining Docker Compose \n \n\n\n"
+        "Generate a title for a chat session not more than 5 words using the user first input. You respond should be the title ONLY (one title) without the string quote an example is \n Explaining Docker Compose \n \n\n\n"
         + content
     )
     title = "Untitled Session"
@@ -150,6 +150,7 @@ def build_graph(agent):
             {
                 "session_id": state["session_id"],
                 "user_id": state["user_id"],
+                "ghost_session": state["ghost_session"],
                 "messages": messages,
             }
         )

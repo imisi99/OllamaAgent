@@ -19,7 +19,9 @@ async def get_user_id(db: Database = Depends(get_mongo_database)):
                 status_code=status.HTTP_404_NOT_FOUND,
                 content={"msg": "User not found."},
             )
+
         return JSONResponse(status_code=status.HTTP_200_OK, content={"id": id})
+
     except Exception as e:
         logging.error(f"An error occured while trying to get user id -> {e}")
         return JSONResponse(
@@ -28,13 +30,15 @@ async def get_user_id(db: Database = Depends(get_mongo_database)):
         )
 
 
-@user.post("/user/create")
+@user.post("/user/create/{username}")
 async def create_user(username: str, db: Database = Depends(get_mongo_database)):
     try:
         id, created = db.create_user(username)
         if not created:
-            raise Exception
+            raise Exception("MongoDB operation to create user not acknowledged")
+
         return JSONResponse(status_code=status.HTTP_200_OK, content={"id": id})
+
     except Exception as e:
         logging.error(f"An error occured while trying to create new user -> {e}")
         return JSONResponse(
@@ -52,13 +56,15 @@ async def get_user(id: str, db: Database = Depends(get_mongo_database)):
                 status_code=status.HTTP_404_NOT_FOUND,
                 content={"msg": "User not found."},
             )
+
+        return JSONResponse(status_code=status.HTTP_200_OK, content={"user": user})
+
     except Exception as e:
         logging.error(f"An error occured while trying to retrieve user -> {e}")
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={"msg": "Failed to retrieve user."},
         )
-    return JSONResponse(status_code=status.HTTP_200_OK, content={"user": user})
 
 
 @user.put("/user/{id}/update/memory")
@@ -68,10 +74,12 @@ async def update_memory(
     try:
         updated = db.update_user_memory(id, key, value)
         if not updated:
-            raise Exception
+            raise Exception("MongoDB operation to update memory not acknowledged")
+
         return JSONResponse(
             status_code=status.HTTP_202_ACCEPTED, content={"msg": "memory updated."}
         )
+
     except Exception as e:
         logging.error(f"An error occured while trying to update memory -> {e}")
         return JSONResponse(
@@ -87,10 +95,12 @@ async def update_username(
     try:
         updated = db.update_user_name(id, name)
         if not updated:
-            raise Exception
+            raise Exception("MongoDB operation to update username not acknowledged")
+
         return JSONResponse(
             status_code=status.HTTP_202_ACCEPTED, content={"msg": "username updated."}
         )
+
     except Exception as e:
         logging.error(f"An error occured while trying to update username -> {e}")
         return JSONResponse(
@@ -104,10 +114,14 @@ async def delete_memory(id: str, key: str, db: Database = Depends(get_mongo_data
     try:
         deleted = db.remove_user_memory(id, key)
         if not deleted:
-            raise Exception
+            raise Exception(
+                "MongoDB operation to remove a key from memory not acknowledged"
+            )
+
         return JSONResponse(
             status_code=status.HTTP_202_ACCEPTED, content={"msg": "memory updated."}
         )
+
     except Exception as e:
         logging.error(f"An error occured while trying to update memory -> {e}")
         return JSONResponse(

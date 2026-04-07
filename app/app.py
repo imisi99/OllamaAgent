@@ -13,6 +13,9 @@ chat_holders = [
     "Back at it again !",
 ]
 
+# TODO: Use Expanded for the user profile settings probably
+
+
 if "user_id" not in st.session_state:
     try:
         user_req = requests.get(url="http://server:8000/user")
@@ -23,7 +26,27 @@ if "user_id" not in st.session_state:
         elif user_req.status_code == 404:
             st.info(user_req.json()["msg"])
             if prompt := st.chat_input("Create a new user"):
-                pass
+                try:
+                    new_user_req = requests.post(
+                        url="http://server:8000/user/create/" + prompt
+                    )
+
+                    if new_user_req.status_code == 200:
+                        st.session_state.user_id = new_user_req.json()["id"]
+                        st.rerun()
+                    else:
+                        st.error(new_user_req.json()["msg"])
+                        st.stop()
+                except Exception as e:
+                    logging.error(
+                        f"An error occured while making a request to the server -> {e}"
+                    )
+                    st.error("Failed to create a new user")
+                    st.stop()
+            else:
+                st.info("You have to create a new user")
+                st.stop()
+
         else:
             st.error("Failed to retrieve user.")
             st.stop()
@@ -44,6 +67,18 @@ with st.sidebar:
         st.session_state.session_uid = ""
         st.session_state.messages = []
         st.session_state.chat_holder = random.randint(0, len(chat_holders) - 1)
+        st.rerun()
+
+    if st.button(
+        "Ghost Chat",
+        icon=":material/add:",
+        type="tertiary",
+        help="A new temporary session not stored",
+    ):
+        st.session_state.session_id = ""
+        st.session_state.session_uid = ""
+        st.session_state.ghost_session = True
+        st.session_state.messages = []
         st.rerun()
 
     if "sessions_fetched" not in st.session_state or st.session_state.get(
@@ -74,7 +109,7 @@ with st.sidebar:
     if st.session_state.get("sessions"):
         for session in reversed(st.session_state.sessions):
             if st.button(session["name"], use_container_width=True):
-                active_session = None
+                st.session_state.session_name = session["name"]
                 try:
                     message_req = requests.get(
                         "http://server:8000/session/" + session["_id"]
@@ -88,7 +123,13 @@ with st.sidebar:
                         st.error("Failed to fetch session.")
                         st.stop()
                     else:
-                        active_session = message_req.json()["session"]
+                        st.session_state.session_id = session["_id"]
+                        st.session_state.session_uid = session["uuid"]
+                        st.session_state.chat_holder = -1
+                        st.session_state.messages = message_req.json()["session"][
+                            "messages"
+                        ]
+                        st.rerun()
 
                 except Exception as e:
                     logging.error(
@@ -97,14 +138,12 @@ with st.sidebar:
                     st.error(f"Failed to complete request to server -> {e}")
                     st.stop()
 
-                st.session_state.session_id = session["_id"]
-                st.session_state.session_uid = session["uuid"]
-                st.session_state.chat_holder = -1
-                st.session_state.messages = active_session["messages"]
-                st.rerun()
 
 if "chat_holder" not in st.session_state:
     st.session_state.chat_holder = random.randint(0, len(chat_holders) - 1)
+
+if "ghost_session" not in st.session_state:
+    st.session_state.ghost_session = False
 
 if st.session_state.chat_holder != -1:
     st.subheader(chat_holders[st.session_state.chat_holder])
@@ -112,69 +151,121 @@ if st.session_state.chat_holder != -1:
 if "session_id" not in st.session_state:
     st.session_state.session_id = ""
     st.session_state.session_uid = ""
+    st.session_state.session_name = ""
     st.session_state.messages = []
 
-if "messages" in st.session_state:
-    for msg in st.session_state.messages:
-        with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
+if st.session_state.session_id != "" and not st.session_state.ghost_session:
+    with st.expander(label=st.session_state.session_name):
+        if st.button("Rename"):
+            if prompt := st.chat_input("Enter New Name"):
+                try:
+                    rename_req = requests.put(
+                        url="http://server:8000/session/rename/"
+                        + st.session_state.session_id
+                        + "/"
+                        + st.session_state.session_uid,
+                        json={"name": prompt},
+                    )
+
+                    if rename_req.status_code == 202:
+                        st.session_state.session_name = prompt
+                        st.rerun()
+                    else:
+                        st.error(
+                            f"Failed to rename session -> {rename_req.json()['msg']}"
+                        )
+                        st.stop()
+
+                except Exception as e:
+                    logging.error(
+                        f"An error occured while making a request to the server -> {e}"
+                    )
+                    st.error(f"Failed to complete request to server -> {e}")
+                    st.stop()
+
+        if st.button("Delete"):
+            try:
+                delete_req = requests.delete(
+                    url="http://server:8000/session/delete/"
+                    + st.session_state.session_id
+                    + "/"
+                    + st.session_state.session_uid,
+                )
+
+                if delete_req.status_code == 204:
+                    st.session_state.update_view = True
+                    st.session_state.session_id = ""
+                    st.session_state.session_uid = ""
+                    st.session_state.messages = []
+                    st.session_state.session_name = ""
+                    st.rerun()
+                else:
+                    st.error(f"Failed to delete session -> {delete_req.json()['msg']}")
+                    st.stop()
+
+            except Exception as e:
+                logging.error(
+                    f"An error occured while making a request to the server -> {e}"
+                )
+                st.error(f"Failed to complete request to server -> {e}")
+                st.stop()
+
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
 
 if prompt := st.chat_input("", key="chat", accept_file="multiple"):
-    if st.session_state.session_id == "":
+    if st.session_state.session_id == "" and not st.session_state.ghost_session:
         try:
             new_session = requests.post(
                 url="http://server:8000/session/create",
-                json={
-                    "session_id": "",
-                    "message": {
+                json={"prompt": prompt.text},
+            )
+
+            if new_session.status_code != 201:
+                st.error(f"Failed to start a new session, json -> {new_session.json()}")
+                st.stop()
+
+            st.session_state.session_id = new_session.json()["id"]
+            st.session_state.session_uid = new_session.json()["uid"]
+            st.session_state.chat_holder = -1
+            st.session_state.update_view = True
+
+        except Exception as e:
+            logging.error(
+                f"An error occured while making a request to the server -> {e}"
+            )
+            st.error(f"Failed to complete request to server -> {e}")
+            st.stop()
+
+    with st.chat_message("user"):
+        if not st.session_state.ghost_session:
+            try:
+                add_msg_response = requests.put(
+                    url="http://server:8000/session/msg/"
+                    + st.session_state.session_id
+                    + "/"
+                    + st.session_state.session_uid,
+                    json={
                         "role": "user",
                         "content": prompt.text,
                         "timestamp": datetime.now().isoformat(),
                     },
-                },
-            )
+                )
 
-            if new_session.status_code != 200:
-                st.error("Failed to start a new session.")
+                if add_msg_response.status_code != 202:
+                    st.error("Failed to send message to agent.")
+                    st.stop()
+
+            except Exception as e:
+                logging.error(
+                    f"An error occured while making a request to the server -> {e}"
+                )
+                st.error(f"Failed to complete request to server -> {e}")
                 st.stop()
-        except Exception as e:
-            logging.error(
-                f"An error occured while making a request to the server -> {e}"
-            )
-            st.error(f"Failed to complete request to server -> {e}")
-            st.stop()
-        st.session_state.session_id = new_session.json()["id"]
-        st.session_state.session_uid = new_session.json()["uid"]
-        st.session_state.chat_holder = -1
-        st.session_state.update_view = True
-
-    with st.chat_message("user"):
-        try:
-            add_msg_response = requests.post(
-                url="http://server:8000/session/msg/"
-                + st.session_state.session_id
-                + "/"
-                + st.session_state.session_uid,
-                json={
-                    "role": "user",
-                    "content": prompt.text,
-                    "timestamp": datetime.now().isoformat(),
-                },
-            )
-
-            if add_msg_response.status_code != 200:
-                st.error("Failed to send message to agent.")
-                st.stop()
-
-        except Exception as e:
-            logging.error(
-                f"An error occured while making a request to the server -> {e}"
-            )
-            st.error(f"Failed to complete request to server -> {e}")
-            st.stop()
 
         st.markdown(prompt.text)
-    st.session_state.messages.append({"role": "user", "content": prompt.text})
+        st.session_state.messages.append({"role": "user", "content": prompt.text})
 
     with st.chat_message("assistant"):
         try:
@@ -188,6 +279,7 @@ if prompt := st.chat_input("", key="chat", accept_file="multiple"):
                         "content": prompt.text,
                         "timestamp": datetime.now().isoformat(),
                     },
+                    "ghost_session": st.session_state.ghost_session,
                 },
             )
 
@@ -195,21 +287,27 @@ if prompt := st.chat_input("", key="chat", accept_file="multiple"):
                 st.error("Failed to communicate with agent.")
                 st.stop()
 
-            add_msg_response = requests.post(
-                url="http://server:8000/session/msg/"
-                + st.session_state.session_id
-                + "/"
-                + st.session_state.session_uid,
-                json={
-                    "role": "assistant",
-                    "content": response.json()["msg"],
-                    "timestamp": datetime.now().isoformat(),
-                },
-            )
+            if not st.session_state.ghost_session:
+                add_msg_response = requests.put(
+                    url="http://server:8000/session/msg/"
+                    + st.session_state.session_id
+                    + "/"
+                    + st.session_state.session_uid,
+                    json={
+                        "role": "assistant",
+                        "content": response.json()["msg"],
+                        "timestamp": datetime.now().isoformat(),
+                    },
+                )
 
-            if add_msg_response.status_code != 200:
-                st.error("Failed to communicate with agent.")
-                st.stop()
+                if add_msg_response.status_code != 202:
+                    st.error("Failed to communicate with agent.")
+                    st.stop()
+
+            st.markdown(response.json()["msg"])
+            st.session_state.messages.append(
+                {"role": "assistant", "content": response.json()["msg"]}
+            )
 
         except Exception as e:
             logging.error(
@@ -217,12 +315,6 @@ if prompt := st.chat_input("", key="chat", accept_file="multiple"):
             )
             st.error(f"Failed to complete request to server -> {e}")
             st.stop()
-
-        st.markdown(response.json()["msg"])
-
-    st.session_state.messages.append(
-        {"role": "assistant", "content": response.json()["msg"]}
-    )
 
     if st.session_state.get("update_view"):
         st.rerun()

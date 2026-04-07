@@ -11,6 +11,7 @@ from db import mongo, qdrant, redis
 from core import agent, emb
 from app.server import serve
 from app.session import session
+from app.user import user
 
 logging.basicConfig(level=logging.INFO)
 
@@ -25,7 +26,6 @@ async def lifespan(app: FastAPI):
         redis.REDIS_CLIENT = redis.connect_redis()
 
         mongo.MONGO_DATABASE = mongo.create_mongo_database()
-        qdrant.QDRANT_DATABASE = qdrant.create_qdrant_database(emb.get_emb_model())
         redis.REDIS_DATABASE = redis.create_redis_database(
             redis.REDIS_CLIENT, mongo.MONGO_DATABASE
         )
@@ -50,7 +50,10 @@ async def lifespan(app: FastAPI):
         embed = OllamaEmbeddings(
             model="nomic-embed-text", base_url=OLLAMA_BASE_URL, keep_alive=-1
         )
+
         emb.EMB_MODEL = emb.create_emb_model(embed)
+        qdrant.QDRANT_DATABASE = qdrant.create_qdrant_database(emb.get_emb_model())
+
         agent_graph = agent.build_agent(agent.LLM, tools, system_prompt)
         agent.GRAPH = agent.build_graph(agent_graph)
 
@@ -97,3 +100,4 @@ def health():
 
 app.include_router(session)
 app.include_router(serve)
+app.include_router(user)

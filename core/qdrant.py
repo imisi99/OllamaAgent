@@ -12,6 +12,7 @@ from schemas.mongo import Message, Session
 class Job(str, Enum):
     CREATE_POINT = "create point"
     UPDATE_POINT = "update point"
+    UPDATE_PAYLOAD = "update payload"
     DELETE_POINT = "delete point"
 
 
@@ -20,12 +21,14 @@ class Task:
         self,
         job: Job,
         uid: str = "",
+        name: str = "",
         session: Union[Session, None] = None,
         message: Union[Message, None] = None,
         retries: int = 3,
     ) -> None:
         self.uid = uid
         self.job = job
+        self.name = name
         self.session = session
         self.message = message
         self.retries = retries
@@ -127,25 +130,7 @@ class Qdrant:
         logging.info(f"Recommended {len(response)} with an average score of {avgScore}")
         return response, avgScore
 
-    def delete_point(self, id: str) -> bool:
-        point = self.client.retrieve(
-            collection_name="chats", ids=[id], with_payload=False
-        )
-
-        if not point:
-            logging.error(
-                f"Tried to delete point with id -> {id} but point doesn't exist in vector space."
-            )
-            return False
-
-        result = self.client.delete(collection_name="chats", points_selector=[id])
-
-        success = result.status in (UpdateStatus.COMPLETED, UpdateStatus.ACKNOWLEDGED)
-        if not success:
-            logging.error(f"Failed to delete point with id -> {id} result -> {result}")
-        return success
-
-    async def _update_point(self, id: str, message: Message):
+    async def update_point(self, id: str, message: Message):
         point = self.client.retrieve("chats", ids=[id], with_payload=True)
         if not point:
             logging.error(
@@ -186,6 +171,46 @@ class Qdrant:
                 f"Failed to update session with id -> {id} result -> {result}, status -> {result.status}"
             )
 
+    async def update_payload(self, id: str, name: str) -> bool:
+        point = self.client.retrieve(
+            collection_name="chats", ids=[id], with_payload=False
+        )
+
+        if not point:
+            logging.error(
+                f"Tried to update payload with point id -> {id} but point doesn't exist in vector space."
+            )
+            return False
+
+        result = self.client.set_payload(
+            collection_name="chats", payload={"title": name}, points=[id]
+        )
+
+        success = result.status in (UpdateStatus.COMPLETED, UpdateStatus.ACKNOWLEDGED)
+        if not success:
+            logging.error(
+                f"Failed to update the title of point with id -> {id} result -> {result}"
+            )
+        return success
+
+    async def delete_point(self, id: str) -> bool:
+        point = self.client.retrieve(
+            collection_name="chats", ids=[id], with_payload=False
+        )
+
+        if not point:
+            logging.error(
+                f"Tried to delete point with id -> {id} but point doesn't exist in vector space."
+            )
+            return False
+
+        result = self.client.delete(collection_name="chats", points_selector=[id])
+
+        success = result.status in (UpdateStatus.COMPLETED, UpdateStatus.ACKNOWLEDGED)
+        if not success:
+            logging.error(f"Failed to delete point with id -> {id} result -> {result}")
+        return success
+
     def add_job(self, task: Task):
         self.jobs.put_nowait(task)
 
@@ -200,11 +225,13 @@ class Qdrant:
                             case Job.CREATE_POINT:
                                 await self.create_point(cast(Session, task.session))
                             case Job.UPDATE_POINT:
-                                await self._update_point(
+                                await self.update_point(
                                     task.uid, cast(Message, task.message)
                                 )
                             case Job.DELETE_POINT:
-                                self.delete_point(task.uid)
+                                await self.delete_point(task.uid)
+                            case Job.UPDATE_PAYLOAD:
+                                await self.update_payload(task.uid, task.name)
                         break
                     except Exception as e:
                         if attempts < MAX_ATTEMPTS - 1:

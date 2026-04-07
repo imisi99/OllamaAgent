@@ -139,6 +139,16 @@ class Database:
 
         return result
 
+    def rename_session(self, session_id: str, name: str) -> bool:
+        result = self.session_collection.update_one(
+            {"_id": ObjectId(session_id)}, {"$set": {"name": name}}
+        )
+
+        if result.modified_count == 0:
+            return False
+
+        return result.acknowledged
+
     def add_messages(self, session_id: str, message: Message) -> bool:
         result = self.session_collection.update_one(
             {"_id": ObjectId(session_id)}, {"$push": {"messages": message}}
