@@ -163,12 +163,14 @@ if st.session_state.session_id != "" and not st.session_state.ghost_session:
                         url="http://server:8000/session/rename/"
                         + st.session_state.session_id
                         + "/"
-                        + st.session_state.session_uid,
-                        json={"name": prompt},
+                        + st.session_state.session_uid
+                        + "?name="
+                        + prompt
                     )
 
                     if rename_req.status_code == 202:
                         st.session_state.session_name = prompt
+                        st.session_state.update_view = True
                         st.rerun()
                     else:
                         st.error(
@@ -192,7 +194,7 @@ if st.session_state.session_id != "" and not st.session_state.ghost_session:
                     + st.session_state.session_uid,
                 )
 
-                if delete_req.status_code == 204:
+                if delete_req.status_code == 200:
                     st.session_state.update_view = True
                     st.session_state.session_id = ""
                     st.session_state.session_uid = ""

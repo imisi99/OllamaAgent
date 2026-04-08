@@ -5,24 +5,26 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 from starlette import status
 
-from core.agent import generate_title
+from core.agent import get_model, Model
 from core.mongo import Database
 from core.qdrant import Job, Qdrant, Task
 from db.mongo import get_mongo_database
 from db.qdrant import get_qdrant_database
 from schemas.mongo import Message, Session
+from schemas.session import CreateSession
 
 session = APIRouter()
 
 
 @session.post("/session/create")
 async def create_session(
-    prompt: str,
+    prompt: CreateSession,
     db: Database = Depends(get_mongo_database),
     qdb: Qdrant = Depends(get_qdrant_database),
+    model: Model = Depends(get_model),
 ):
     try:
-        title = generate_title(prompt)
+        title = model.generate_title(prompt.prompt)
         uid = str(uuid4())
 
         sess: Session = {
@@ -54,6 +56,7 @@ async def create_session(
 @session.put("/session/rename/{session_id}/{session_uid}")
 async def rename(
     session_id: str,
+    session_uid: str,
     name: str,
     db: Database = Depends(get_mongo_database),
     qdb: Qdrant = Depends(get_qdrant_database),
@@ -63,7 +66,7 @@ async def rename(
         if not updated:
             raise Exception("MongoDB operation to rename session not acknowledged.")
 
-        qdb.add_job(Task(job=Job.UPDATE_PAYLOAD, name=name))
+        qdb.add_job(Task(uid=session_uid, job=Job.UPDATE_PAYLOAD, name=name))
 
         return JSONResponse(
             status_code=status.HTTP_202_ACCEPTED,
@@ -190,7 +193,7 @@ async def delete_session(
         qdb.add_job(Task(uid=session_uid, job=Job.DELETE_POINT))
 
         return JSONResponse(
-            status_code=status.HTTP_204_NO_CONTENT, content={"msg": "Session deleted."}
+            status_code=status.HTTP_200_OK, content={"msg": "Session deleted."}
         )
 
     except Exception as e:

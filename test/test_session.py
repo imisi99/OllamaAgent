@@ -6,6 +6,7 @@ from main import app
 
 
 sess_id = ""
+sess_uid = ""
 
 
 @pytest.mark.asyncio
@@ -30,8 +31,16 @@ async def test_create_session():
             response = await ac.post("/session/create", json=body)
         assert response.status_code == 200
         assert "id" in response.json()
+        assert "uid" in response.json()
         global sess_id
+        global sess_uid
         sess_id = response.json()["id"]
+        sess_uid = response.json()["uid"]
+
+
+@pytest.mark.asyncio
+async def test_rename_session():
+    pass
 
 
 @pytest.mark.asyncio

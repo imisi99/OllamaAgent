@@ -1,6 +1,6 @@
-from typing import TypedDict
+from typing import TypedDict, Any
 
-from langchain_ollama import ChatOllama
+
 from .mongo import Message
 
 
@@ -12,5 +12,5 @@ class SessionConversation(TypedDict):
 
 
 class SessionState(SessionConversation):
-    llm: ChatOllama
+    model: Any
     response: str

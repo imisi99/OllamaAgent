@@ -3,7 +3,7 @@ import logging
 from enum import Enum
 from typing import Union, cast
 from qdrant_client import QdrantClient
-from qdrant_client.models import PointStruct
+from qdrant_client.models import FieldCondition, Filter, MatchValue, PointStruct
 from qdrant_client.http.models import UpdateStatus
 from .emb import EmbeddingModel
 from schemas.mongo import Message, Session
@@ -47,7 +47,7 @@ class Qdrant:
             points=[
                 PointStruct(
                     id=session["uuid"],
-                    vector={"description": vector},
+                    vector={"messages": vector},
                     payload={
                         "id": session["_id"],
                         "uuid": session["uuid"],
@@ -109,6 +109,9 @@ class Qdrant:
             using="messages",
             score_threshold=score_threshold,
             limit=limit,
+            query_filter=Filter(
+                must_not=[FieldCondition(key="uuid", match=MatchValue(value=id))]
+            ),
         )
 
         response: list[tuple[Session, float]] = []
@@ -130,20 +133,20 @@ class Qdrant:
         logging.info(f"Recommended {len(response)} with an average score of {avgScore}")
         return response, avgScore
 
-    async def update_point(self, id: str, message: Message):
+    async def update_point(self, id: str, message: Message) -> bool:
         point = self.client.retrieve("chats", ids=[id], with_payload=True)
         if not point:
             logging.error(
                 f"Tried to update point with id -> {id} but point doesn't exist in vector space."
             )
-            return
+            return False
 
         payload = point[0].payload
         if not payload:
             logging.error(
                 f"Tried to update point with id -> {id} but payload doesn't exist"
             )
-            return
+            return False
 
         payload["messages"].append(message)
         session = cast(Session, payload)
@@ -167,9 +170,10 @@ class Qdrant:
 
         success = result.status in (UpdateStatus.COMPLETED, UpdateStatus.ACKNOWLEDGED)
         if not success:
-            raise RuntimeError(
+            logging.error(
                 f"Failed to update session with id -> {id} result -> {result}, status -> {result.status}"
             )
+        return success
 
     async def update_payload(self, id: str, name: str) -> bool:
         point = self.client.retrieve(
@@ -223,16 +227,25 @@ class Qdrant:
                     try:
                         match task.job:
                             case Job.CREATE_POINT:
-                                await self.create_point(cast(Session, task.session))
+                                created = await self.create_point(
+                                    cast(Session, task.session)
+                                )
+                                if created:
+                                    break
                             case Job.UPDATE_POINT:
-                                await self.update_point(
+                                updated = await self.update_point(
                                     task.uid, cast(Message, task.message)
                                 )
+                                if updated:
+                                    break
                             case Job.DELETE_POINT:
-                                await self.delete_point(task.uid)
+                                deleted = await self.delete_point(task.uid)
+                                if deleted:
+                                    break
                             case Job.UPDATE_PAYLOAD:
-                                await self.update_payload(task.uid, task.name)
-                        break
+                                updated = await self.update_payload(task.uid, task.name)
+                                if updated:
+                                    break
                     except Exception as e:
                         if attempts < MAX_ATTEMPTS - 1:
                             logging.error(

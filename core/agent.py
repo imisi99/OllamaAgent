@@ -37,64 +37,80 @@ def get_llm_reasoniing() -> ChatOllama:
     return LLM
 
 
-def log_llm_response(response, label: str = "LLM"):
-    reasoning = response.additional_kwargs.get("reasoning_content", None)
-    content = response.content
-    metadata = response.response_metadata
+class Model:
+    def __init__(self) -> None:
+        self.no_reason = get_llm_no_reasoning()
+        self.reason = get_llm_reasoniing()
 
-    if reasoning:
-        logging.info(f"[{label}] THINKING: \n {reasoning}")
+    def log_llm_response(self, response, label: str = "LLM"):
+        reasoning = response.additional_kwargs.get("reasoning_content", None)
+        content = response.content
+        metadata = response.response_metadata
 
-    if isinstance(content, str):
-        logging.info(f"[{label}] RESPONSE: {content}")
-    elif isinstance(content, list):
-        for block in content:
-            if isinstance(block, dict) and block.get("type") == "text":
-                logging.info(f"[{label}] RESPONSE: {block['text']}")
+        if reasoning:
+            logging.info(f"[{label}] THINKING: \n {reasoning}")
 
-    logging.info(
-        f"[{label}] TOKENS -> input: {metadata.get('prompt_eval_count')} "
-        f"output: {metadata.get('eval_count')} "
-        f"total_duration: {metadata.get('total_duration', 0) / 1e9:.3f}s"
-    )
+        if isinstance(content, str):
+            logging.info(f"[{label}] RESPONSE: {content}")
+        elif isinstance(content, list):
+            for block in content:
+                if isinstance(block, dict) and block.get("type") == "text":
+                    logging.info(f"[{label}] RESPONSE: {block['text']}")
 
+        logging.info(
+            f"[{label}] TOKENS -> input: {metadata.get('prompt_eval_count')} "
+            f"output: {metadata.get('eval_count')} "
+            f"total_duration: {metadata.get('total_duration', 0) / 1e9:.3f}s"
+        )
 
-def summarize_messages(llm: ChatOllama, messages: list[Message]) -> str | None:
-    conversation = "\n".join(f"{m['role']}: {m['content']}" for m in messages)
+    def generate_title(self, content: str) -> str:
+        prompt = (
+            "Generate a title for a chat session not more than 5 words using the user first input. You respond should be the title ONLY (one title) without the string quote an example is \n Explaining Docker Compose \n \n\n\n"
+            + content
+        )
+        title = "Untitled Session"
 
-    prompt = ChatPromptTemplate.from_messages(
-        [
-            SystemMessage(
-                content="Summarize the following conversation concisely, preserving key facts and context."
-            ),
-            HumanMessage(content=conversation),
-        ]
-    )
+        try:
+            response = self.no_reason.invoke(prompt)
+            self.log_llm_response(response, "TITLEGEN")
+            if isinstance(response.content, str):
+                title = response.content
+        except Exception as e:
+            logging.error(f"Failed to generate title -> {e}")
+        return title
 
-    chain = prompt | llm
-    response = chain.invoke({})
-    log_llm_response(response, "SUMMARIZER")
-    if isinstance(response.content, str):
-        return response.content
+    def summarize_messagess(self, messages: list[Message]) -> str | None:
+        conversation = "\n".join(f"{m['role']}: {m['content']}" for m in messages)
 
-    return None
+        prompt = ChatPromptTemplate.from_messages(
+            [
+                SystemMessage(
+                    content="Summarize the following conversation concisely, preserving key facts and context."
+                ),
+                HumanMessage(content=conversation),
+            ]
+        )
 
-
-def generate_title(content: str) -> str:
-    prompt = (
-        "Generate a title for a chat session not more than 5 words using the user first input. You respond should be the title ONLY (one title) without the string quote an example is \n Explaining Docker Compose \n \n\n\n"
-        + content
-    )
-    title = "Untitled Session"
-
-    try:
-        response = get_llm_no_reasoning().invoke(prompt)
-        log_llm_response(response, "TITLEGEN")
+        chain = prompt | self.no_reason
+        response = chain.invoke({})
+        self.log_llm_response(response, "SUMMARIZER")
         if isinstance(response.content, str):
-            title = response.content
-    except Exception as e:
-        logging.error(f"Failed to generate title -> {e}")
-    return title
+            return response.content
+
+        return None
+
+
+MODEL: Optional[Model] = None
+
+
+def get_model() -> Model:
+    if MODEL is None:
+        raise RuntimeError("Failed to initialize the model")
+    return MODEL
+
+
+def create_model() -> Model:
+    return Model()
 
 
 def build_agent(llm: ChatOllama, tools: list, prompt: SystemMessage):
@@ -116,7 +132,7 @@ def build_graph(agent):
         redDB = get_redis_database()
         msg = redDB.get_short_term_memory(session_id)
         if len(msg) > 25:
-            summarized = summarize_messages(state["llm"], msg)
+            summarized = state["model"].summarize_messagess(msg)
             if summarized is None:
                 return state
             redDB.clear_short_term_memory(session_id)
@@ -155,7 +171,7 @@ def build_graph(agent):
             }
         )
 
-        log_llm_response(response, "AGENT")
+        state["model"].log_llm_response(response, "AGENT")
 
         get_redis_database().add_short_term_memory(
             session_id,
