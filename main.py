@@ -15,6 +15,8 @@ from app.user import user
 
 logging.basicConfig(level=logging.INFO)
 
+# TODO: Make a choice of using the async or sync of the datastores
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -63,9 +65,9 @@ async def lifespan(app: FastAPI):
 
     except Exception as e:
         logging.error(
-            "An error occured while trying startup app -> %s", e, exc_info=True
+            f"An error occured while trying startup app -> {e}", exc_info=True
         )
-        raise RuntimeError("")
+        raise RuntimeError(f"Failed to startup app -> {e}")
     yield
     async with httpx.AsyncClient() as client:
         base_url = os.getenv("OLLAMA_BASE_URL", "")

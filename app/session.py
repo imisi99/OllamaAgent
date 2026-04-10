@@ -17,7 +17,7 @@ session = APIRouter()
 
 
 @session.post("/session/create")
-async def create_session(
+def create_session(
     prompt: CreateSession,
     db: Database = Depends(get_mongo_database),
     qdb: Qdrant = Depends(get_qdrant_database),
@@ -42,7 +42,8 @@ async def create_session(
         qdb.add_job(Task(job=Job.CREATE_POINT, session=sess))
 
         return JSONResponse(
-            status_code=status.HTTP_201_CREATED, content={"id": id, "uid": uid}
+            status_code=status.HTTP_201_CREATED,
+            content={"id": id, "uid": uid, "title": title},
         )
 
     except Exception as e:
@@ -54,7 +55,7 @@ async def create_session(
 
 
 @session.put("/session/rename/{session_id}/{session_uid}")
-async def rename(
+def rename(
     session_id: str,
     session_uid: str,
     name: str,
@@ -82,7 +83,7 @@ async def rename(
 
 
 @session.put("/session/msg/{session_id}/{session_uid}")
-async def add_message(
+def add_message(
     message: Message,
     session_id: str,
     session_uid: str,

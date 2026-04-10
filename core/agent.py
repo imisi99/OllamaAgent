@@ -11,6 +11,7 @@ from db.redis import get_redis_database
 from schemas.agent import SessionState
 from schemas.mongo import Message
 
+# TODO:The prompt length is a factor causing slow response from the agent (reduce it)
 
 GRAPH: Optional[CompiledStateGraph[SessionState, None, SessionState, SessionState]] = (
     None
@@ -65,7 +66,7 @@ class Model:
 
     def generate_title(self, content: str) -> str:
         prompt = (
-            "Generate a title for a chat session not more than 5 words using the user first input. You respond should be the title ONLY (one title) without the string quote an example is \n Explaining Docker Compose \n \n\n\n"
+            "Generate a title for a chat session not more than 5 words using the user first input. Your response should be the title ONLY (one title) without the string quote or any tags an example is \n Explaining Docker Compose \n \n\n\n"
             + content
         )
         title = "Untitled Session"
@@ -171,7 +172,7 @@ def build_graph(agent):
             }
         )
 
-        state["model"].log_llm_response(response, "AGENT")
+        state["model"].log_llm_response(response["messages"][-1], "AGENT")
 
         get_redis_database().add_short_term_memory(
             session_id,

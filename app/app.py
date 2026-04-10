@@ -14,6 +14,79 @@ chat_holders = [
 ]
 
 # TODO: Use Expanded for the user profile settings probably
+# The Rename isn't doing anything
+# The Delete does work but it doesn't clear from the sidebar until refreshed also delete from cache also
+# Is it possible to clear the notification of info, error and warning
+# The name in the extend stuff doesn't show it after first instance
+
+
+def remove_active_session_from_sessions():
+    for session in st.session_state.sessions:
+        if session["_id"] == st.session_state.session_id:
+            st.session_state.sessions.remove(session)
+
+
+def display_session_actions():
+    if st.session_state.session_id != "" and not st.session_state.ghost_session:
+        with st.expander(label=st.session_state.session_name):
+            if st.button("Rename"):
+                if prompt := st.chat_input("Enter New Name"):
+                    try:
+                        rename_req = requests.put(
+                            url="http://server:8000/session/rename/"
+                            + st.session_state.session_id
+                            + "/"
+                            + st.session_state.session_uid
+                            + "?name="
+                            + prompt
+                        )
+
+                        if rename_req.status_code == 202:
+                            st.session_state.session_name = prompt
+                            st.session_state.update_view = True
+                            st.rerun()
+                        else:
+                            st.error(
+                                f"Failed to rename session -> {rename_req.json()['msg']}"
+                            )
+                            st.stop()
+
+                    except Exception as e:
+                        logging.error(
+                            f"An error occured while making a request to the server -> {e}"
+                        )
+                        st.error(f"Failed to complete request to server -> {e}")
+                        st.stop()
+
+            if st.button("Delete"):
+                try:
+                    delete_req = requests.delete(
+                        url="http://server:8000/session/delete/"
+                        + st.session_state.session_id
+                        + "/"
+                        + st.session_state.session_uid,
+                    )
+
+                    if delete_req.status_code == 200:
+                        st.session_state.update_view = True
+                        remove_active_session_from_sessions()
+                        st.session_state.session_id = ""
+                        st.session_state.session_uid = ""
+                        st.session_state.messages = []
+                        st.session_state.session_name = ""
+                        st.rerun()
+                    else:
+                        st.error(
+                            f"Failed to delete session -> {delete_req.json()['msg']}"
+                        )
+                        st.stop()
+
+                except Exception as e:
+                    logging.error(
+                        f"An error occured while making a request to the server -> {e}"
+                    )
+                    st.error(f"Failed to complete request to server -> {e}")
+                    st.stop()
 
 
 if "user_id" not in st.session_state:
@@ -125,6 +198,7 @@ with st.sidebar:
                     else:
                         st.session_state.session_id = session["_id"]
                         st.session_state.session_uid = session["uuid"]
+                        st.session_state.ghost_session = False
                         st.session_state.chat_holder = -1
                         st.session_state.messages = message_req.json()["session"][
                             "messages"
@@ -154,68 +228,12 @@ if "session_id" not in st.session_state:
     st.session_state.session_name = ""
     st.session_state.messages = []
 
-if st.session_state.session_id != "" and not st.session_state.ghost_session:
-    with st.expander(label=st.session_state.session_name):
-        if st.button("Rename"):
-            if prompt := st.chat_input("Enter New Name"):
-                try:
-                    rename_req = requests.put(
-                        url="http://server:8000/session/rename/"
-                        + st.session_state.session_id
-                        + "/"
-                        + st.session_state.session_uid
-                        + "?name="
-                        + prompt
-                    )
-
-                    if rename_req.status_code == 202:
-                        st.session_state.session_name = prompt
-                        st.session_state.update_view = True
-                        st.rerun()
-                    else:
-                        st.error(
-                            f"Failed to rename session -> {rename_req.json()['msg']}"
-                        )
-                        st.stop()
-
-                except Exception as e:
-                    logging.error(
-                        f"An error occured while making a request to the server -> {e}"
-                    )
-                    st.error(f"Failed to complete request to server -> {e}")
-                    st.stop()
-
-        if st.button("Delete"):
-            try:
-                delete_req = requests.delete(
-                    url="http://server:8000/session/delete/"
-                    + st.session_state.session_id
-                    + "/"
-                    + st.session_state.session_uid,
-                )
-
-                if delete_req.status_code == 200:
-                    st.session_state.update_view = True
-                    st.session_state.session_id = ""
-                    st.session_state.session_uid = ""
-                    st.session_state.messages = []
-                    st.session_state.session_name = ""
-                    st.rerun()
-                else:
-                    st.error(f"Failed to delete session -> {delete_req.json()['msg']}")
-                    st.stop()
-
-            except Exception as e:
-                logging.error(
-                    f"An error occured while making a request to the server -> {e}"
-                )
-                st.error(f"Failed to complete request to server -> {e}")
-                st.stop()
 
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
+display_session_actions()
 if prompt := st.chat_input("", key="chat", accept_file="multiple"):
     if st.session_state.session_id == "" and not st.session_state.ghost_session:
         try:
@@ -230,6 +248,7 @@ if prompt := st.chat_input("", key="chat", accept_file="multiple"):
 
             st.session_state.session_id = new_session.json()["id"]
             st.session_state.session_uid = new_session.json()["uid"]
+            st.session_state.session_name = new_session.json()["title"]
             st.session_state.chat_holder = -1
             st.session_state.update_view = True
 

@@ -10,7 +10,7 @@ serve = APIRouter()
 
 
 @serve.post("/agent/chat")
-async def chat_agent(input: SessionConversation):
+def chat_agent(input: SessionConversation):
     session = SessionState(
         {
             "ghost_session": input["ghost_session"],

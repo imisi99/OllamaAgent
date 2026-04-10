@@ -49,10 +49,10 @@ class Qdrant:
                     id=session["uuid"],
                     vector={"messages": vector},
                     payload={
-                        "id": session["_id"],
+                        "_id": session["_id"],
                         "uuid": session["uuid"],
-                        "title": session["name"],
-                        "message": session["messages"],
+                        "name": session["name"],
+                        "messages": session["messages"],
                         "created_at": session["created_at"],
                     },
                 )
@@ -117,10 +117,10 @@ class Qdrant:
         response: list[tuple[Session, float]] = []
         avgScore = 0
         for point in result.points:
-            payload = point.payload
+            payload = cast(Session, point.payload)
             if payload is not None:
                 session: Session = {
-                    "_id": payload["id"],
+                    "_id": payload["_id"],
                     "uuid": payload["uuid"],
                     "created_at": payload["created_at"],
                     "name": payload["name"],
@@ -148,8 +148,8 @@ class Qdrant:
             )
             return False
 
-        payload["messages"].append(message)
         session = cast(Session, payload)
+        session["messages"].append(message)
 
         vector = await self.embedding.generate_vector_embedding(session)
         result = self.client.upsert(
@@ -159,9 +159,10 @@ class Qdrant:
                     id=id,
                     vector={"messages": vector},
                     payload={
-                        "id": session["_id"],
-                        "title": session["name"],
-                        "message": session["messages"],
+                        "_id": session["_id"],
+                        "uuid": session["uuid"],
+                        "name": session["name"],
+                        "messages": session["messages"],
                         "created_at": session["created_at"],
                     },
                 )
@@ -187,7 +188,7 @@ class Qdrant:
             return False
 
         result = self.client.set_payload(
-            collection_name="chats", payload={"title": name}, points=[id]
+            collection_name="chats", payload={"name": name}, points=[id]
         )
 
         success = result.status in (UpdateStatus.COMPLETED, UpdateStatus.ACKNOWLEDGED)
