@@ -112,7 +112,7 @@ def add_message(
 
 
 @session.get("/session/all/preview")
-async def fetch_all_session_preview(db: Database = Depends(get_mongo_database)):
+def fetch_all_session_preview(db: Database = Depends(get_mongo_database)):
     try:
         sessions = db.fetch_all_session_preview()
         if sessions is None or len(sessions) == 0:
@@ -134,7 +134,7 @@ async def fetch_all_session_preview(db: Database = Depends(get_mongo_database)):
 
 
 @session.get("/session/all")
-async def fetch_all_session(db: Database = Depends(get_mongo_database)):
+def fetch_all_session(db: Database = Depends(get_mongo_database)):
     try:
         sessions = db.fetch_all_session()
         if sessions is None or len(sessions) == 0:
@@ -156,9 +156,7 @@ async def fetch_all_session(db: Database = Depends(get_mongo_database)):
 
 
 @session.get("/session/{session_id}")
-async def fetch_single_session(
-    session_id: str, db: Database = Depends(get_mongo_database)
-):
+def fetch_single_session(session_id: str, db: Database = Depends(get_mongo_database)):
     try:
         s_session = db.fetch_session(session_id)
         if s_session is None:
@@ -180,7 +178,7 @@ async def fetch_single_session(
 
 
 @session.delete("/session/delete/{session_id}/{session_uid}")
-async def delete_session(
+def delete_session(
     session_id: str,
     session_uid: str,
     db: Database = Depends(get_mongo_database),

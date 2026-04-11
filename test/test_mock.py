@@ -87,7 +87,7 @@ class MockDatabase:
     def create_user(self, username: str) -> tuple[str, bool]:
         id = str(uuid4())
         self.user[id] = User({"_id": id, "name": username, "memory": {}})
-        return "", False
+        return id, True
 
     def fetch_user_id(self) -> str | None:
         for id in self.user:
@@ -122,7 +122,7 @@ class MockDatabase:
 class MockQdrant:
     def __init__(self) -> None:
         self.points: dict[str, Session] = {}
-        self.tasks: list[Task]
+        self.tasks: list[Task] = []
 
     async def create_point(self, session: Session) -> bool:
         self.points[session["uuid"]] = session
@@ -145,17 +145,6 @@ class MockQdrant:
             self.points.pop(id)
             return True
         return False
-
-    async def get_related_points(
-        self,
-        id: str,
-        query: str,
-        score_threshold: float,
-        use_query: bool = False,
-        limit: int = 1,
-    ) -> tuple[list[tuple[Session, float]], float] | None:
-        result = [(session, 60.56) for _, session in self.points.items()]
-        return result, 50.76
 
     def add_job(self, task: Task):
         self.tasks.append(task)
