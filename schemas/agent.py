@@ -1,4 +1,4 @@
-from typing import TypedDict, Any
+from typing import TypedDict
 
 
 from .mongo import Message
@@ -12,5 +12,4 @@ class SessionConversation(TypedDict):
 
 
 class SessionState(SessionConversation):
-    model: Any
     response: str

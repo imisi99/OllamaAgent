@@ -13,14 +13,16 @@ user = APIRouter()
 @user.get("/user")
 def get_user_id(db: Database = Depends(get_mongo_database)):
     try:
-        id = db.fetch_user_id()
-        if id is None:
+        e_user = db.fetch_user_id()
+        if e_user is None:
             return JSONResponse(
                 status_code=status.HTTP_404_NOT_FOUND,
                 content={"msg": "User not found."},
             )
 
-        return JSONResponse(status_code=status.HTTP_200_OK, content={"id": id})
+        return JSONResponse(
+            status_code=status.HTTP_200_OK, content={"id": e_user[0], "name": e_user[1]}
+        )
 
     except Exception as e:
         logging.error(f"An error occured while trying to get user id -> {e}")

@@ -1,13 +1,19 @@
+from core.agent import get_model
+from db.mongo import get_mongo_database
+from db.qdrant import get_qdrant_database
+from main import app
+
 import json
 import logging
 from typing import Any, cast
 from uuid import uuid4
 
+from schemas.agent import SessionState
 from schemas.mongo import Message, Session, User
 from core.qdrant import Task, Job
 
 
-class MockLLM:
+class MockModel:
     def log_llm_response(self, response, label: str = "LLM"):
         logging.info(f"Testing if this works, {response}, {label}")
 
@@ -16,6 +22,10 @@ class MockLLM:
 
     def summarize_messagess(self, messages: list[Message]) -> str | None:
         return json.dumps(messages)
+
+    def chat(self, prompt: SessionState) -> dict[str, Any]:
+        response = {"response": "Yep this should return very quickly"}
+        return response
 
 
 class MockDatabase:
@@ -164,3 +174,25 @@ class MockQdrant:
                         await self.delete_point(task.uid)
                     case Job.UPDATE_PAYLOAD:
                         await self.update_payload(task.uid, task.name)
+
+
+db = MockDatabase()
+qdb = MockQdrant()
+model = MockModel()
+
+
+def mock_db() -> Any:
+    return db
+
+
+def mock_qdb() -> Any:
+    return qdb
+
+
+def mock_model() -> Any:
+    return model
+
+
+app.dependency_overrides[get_model] = mock_model
+app.dependency_overrides[get_mongo_database] = mock_db
+app.dependency_overrides[get_qdrant_database] = mock_qdb

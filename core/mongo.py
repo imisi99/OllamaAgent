@@ -173,12 +173,12 @@ class Database:
 
         return str(result.inserted_id), True
 
-    def fetch_user_id(self) -> str | None:
+    def fetch_user_id(self) -> tuple[str, str] | None:
         with self.user_collection.find(
             filter={}, projection={"memory": False}
         ) as cursor:
             for user in cursor:
-                return str(user["_id"])
+                return str(user["_id"]), user["name"]
         return None
 
     def fetch_user(self, user_id: str) -> User | None:

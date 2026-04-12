@@ -5,8 +5,14 @@ import requests
 import streamlit as st
 
 
-st.header(":red[Ollama] :grey[_Agent_]", divider="grey", width="content")
+if "show_header" not in st.session_state:
+    st.session_state.show_header = True
 
+if st.session_state.show_header:
+    with st.header(""):
+        col1, col2 = st.columns(2)
+        with col1:
+            st.header(":red[Ollama] :grey[_Agent_]", divider="grey", width="content")
 chat_holders = [
     "What's on your mind ?",
     "How can i help you today ?",
@@ -14,10 +20,68 @@ chat_holders = [
 ]
 
 # TODO: Use Expanded for the user profile settings probably
-# The Rename isn't doing anything
-# The Delete does work but it doesn't clear from the sidebar until refreshed also delete from cache also
 # Is it possible to clear the notification of info, error and warning
 # The name in the extend stuff doesn't show it after first instance
+
+# DONE:
+# The Delete does work but it doesn't clear from the sidebar until refreshed also delete from cache also
+# The Rename isn't doing anything
+
+
+def user_profile():
+    with st.sidebar:
+        with st.expander("⚙️ " + st.session_state.user_name, width=300):
+            with st.popover("Rename"):
+                new_name = st.text_input("Enter New Username")
+                if st.button("Confirm", key="confirm_user_rename"):
+                    if new_name:
+                        try:
+                            rename_user = requests.put(
+                                url="http://localhost:8000/user/"
+                                + st.session_state.user_id
+                                + "/update/"
+                                + new_name.strip()
+                            )
+
+                            if rename_user.status_code == 202:
+                                st.session_state.user_name = new_name.strip()
+                                st.toast("Username updated successfully")
+                                st.rerun()
+
+                            else:
+                                st.toast("Failed to update username")
+                        except Exception as e:
+                            logging.error(
+                                f"An error occured while making a request to the server -> {e}"
+                            )
+
+            with st.popover("Memory"):
+                memory = {}
+                try:
+                    memory_req = requests.get(
+                        url="http://localhost:8000/user/me/" + st.session_state.user_id
+                    )
+
+                    if memory_req.status_code == 404:
+                        pass
+
+                    elif memory_req.status_code == 200:
+                        memory = memory_req.json()["user"]["memory"]
+
+                except Exception as e:
+                    logging.error(
+                        f"An error occured while making a request to the server -> {e}"
+                    )
+
+                for key, value in memory.items():
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        with st.popover(key):
+                            st.expander(value)
+                    with col2:
+                        st.button("Update", key=key)
+                    with col3:
+                        st.button("Delete", key=key + key)
 
 
 def remove_active_session_from_sessions():
@@ -28,26 +92,56 @@ def remove_active_session_from_sessions():
 
 def display_session_actions():
     if st.session_state.session_id != "" and not st.session_state.ghost_session:
-        with st.expander(label=st.session_state.session_name):
-            if st.button("Rename"):
-                if prompt := st.chat_input("Enter New Name"):
+        with st.expander(label=st.session_state.session_name, width=230):
+            with st.expander("Rename"):
+                new_name = st.text_input("Enter New Name", value="")
+                if st.button("Confirm", key="confirm_rename"):
+                    if new_name:
+                        try:
+                            rename_req = requests.put(
+                                url="http://localhost:8000/session/rename/"
+                                + st.session_state.session_id
+                                + "/"
+                                + st.session_state.session_uid
+                                + "?name="
+                                + new_name
+                            )
+
+                            if rename_req.status_code == 202:
+                                st.session_state.session_name = new_name
+                                st.session_state.update_view = True
+                                st.rerun()
+                            else:
+                                st.error(
+                                    f"Failed to rename session -> {rename_req.json()['msg']}"
+                                )
+
+                        except Exception as e:
+                            logging.error(
+                                f"An error occured while making a request to the server -> {e}"
+                            )
+                            st.error(f"Failed to complete request to server -> {e}")
+            with st.expander("Delete"):
+                if st.button("Confirm", key="confirm_delete"):
                     try:
-                        rename_req = requests.put(
-                            url="http://server:8000/session/rename/"
+                        delete_req = requests.delete(
+                            url="http://localhost:8000/session/delete/"
                             + st.session_state.session_id
                             + "/"
-                            + st.session_state.session_uid
-                            + "?name="
-                            + prompt
+                            + st.session_state.session_uid,
                         )
 
-                        if rename_req.status_code == 202:
-                            st.session_state.session_name = prompt
+                        if delete_req.status_code == 200:
                             st.session_state.update_view = True
+                            remove_active_session_from_sessions()
+                            st.session_state.session_id = ""
+                            st.session_state.session_uid = ""
+                            st.session_state.messages = []
+                            st.session_state.session_name = ""
                             st.rerun()
                         else:
                             st.error(
-                                f"Failed to rename session -> {rename_req.json()['msg']}"
+                                f"Failed to delete session -> {delete_req.json()['msg']}"
                             )
                             st.stop()
 
@@ -58,76 +152,55 @@ def display_session_actions():
                         st.error(f"Failed to complete request to server -> {e}")
                         st.stop()
 
-            if st.button("Delete"):
-                try:
-                    delete_req = requests.delete(
-                        url="http://server:8000/session/delete/"
-                        + st.session_state.session_id
-                        + "/"
-                        + st.session_state.session_uid,
-                    )
 
-                    if delete_req.status_code == 200:
-                        st.session_state.update_view = True
-                        remove_active_session_from_sessions()
-                        st.session_state.session_id = ""
-                        st.session_state.session_uid = ""
-                        st.session_state.messages = []
-                        st.session_state.session_name = ""
-                        st.rerun()
-                    else:
-                        st.error(
-                            f"Failed to delete session -> {delete_req.json()['msg']}"
+def get_or_create_user():
+    if "user_id" not in st.session_state:
+        try:
+            user_req = requests.get(url="http://localhost:8000/user")
+
+            if user_req.status_code == 200:
+                st.session_state.user_id = user_req.json()["id"]
+                st.session_state.user_name = "Imisioluwa"  # use user_req.json()["name"]
+                st.rerun()
+            elif user_req.status_code == 404:
+                st.info(user_req.json()["msg"])
+                if prompt := st.chat_input("Create a new user"):
+                    try:
+                        new_user_req = requests.post(
+                            url="http://localhost:8000/user/create/" + prompt.strip()
                         )
-                        st.stop()
 
-                except Exception as e:
-                    logging.error(
-                        f"An error occured while making a request to the server -> {e}"
-                    )
-                    st.error(f"Failed to complete request to server -> {e}")
+                        if new_user_req.status_code == 201:
+                            st.session_state.user_id = new_user_req.json()["id"]
+                            st.session_state.user_name = prompt.strip()
+                            st.rerun()
+                        else:
+                            st.error(new_user_req.json()["msg"])
+                            st.stop()
+                    except Exception as e:
+                        logging.error(
+                            f"An error occured while making a request to the server -> {e}"
+                        )
+                        st.error("Failed to create a new user")
+                        st.stop()
+                else:
+                    st.info("You have to create a new user")
                     st.stop()
 
-
-if "user_id" not in st.session_state:
-    try:
-        user_req = requests.get(url="http://server:8000/user")
-
-        if user_req.status_code == 200:
-            st.session_state.user_id = user_req.json()["id"]
-            st.rerun()
-        elif user_req.status_code == 404:
-            st.info(user_req.json()["msg"])
-            if prompt := st.chat_input("Create a new user"):
-                try:
-                    new_user_req = requests.post(
-                        url="http://server:8000/user/create/" + prompt
-                    )
-
-                    if new_user_req.status_code == 200:
-                        st.session_state.user_id = new_user_req.json()["id"]
-                        st.rerun()
-                    else:
-                        st.error(new_user_req.json()["msg"])
-                        st.stop()
-                except Exception as e:
-                    logging.error(
-                        f"An error occured while making a request to the server -> {e}"
-                    )
-                    st.error("Failed to create a new user")
-                    st.stop()
             else:
-                st.info("You have to create a new user")
+                st.error("Failed to retrieve user.")
                 st.stop()
 
-        else:
-            st.error("Failed to retrieve user.")
+        except Exception as e:
+            logging.error(
+                f"An error occured while making a request to the server -> {e}"
+            )
+            st.error(f"Failed to complete request to server -> {e}")
             st.stop()
 
-    except Exception as e:
-        logging.error(f"An error occured while making a request to the server -> {e}")
-        st.error(f"Failed to complete request to server -> {e}")
-        st.stop()
+
+get_or_create_user()
+user_profile()
 
 
 with st.sidebar:
@@ -138,6 +211,7 @@ with st.sidebar:
     ):
         st.session_state.session_id = ""
         st.session_state.session_uid = ""
+        st.session_state.show_header = True
         st.session_state.messages = []
         st.session_state.chat_holder = random.randint(0, len(chat_holders) - 1)
         st.rerun()
@@ -151,6 +225,7 @@ with st.sidebar:
         st.session_state.session_id = ""
         st.session_state.session_uid = ""
         st.session_state.ghost_session = True
+        st.session_state.show_header = True
         st.session_state.messages = []
         st.rerun()
 
@@ -158,7 +233,7 @@ with st.sidebar:
         "update_view"
     ):
         try:
-            sessions_req = requests.get(url="http://server:8000/session/all/preview")
+            sessions_req = requests.get(url="http://localhost:8000/session/all/preview")
             if sessions_req.status_code == 404:
                 st.info("you have no existing session \n start a new session")
 
@@ -185,7 +260,7 @@ with st.sidebar:
                 st.session_state.session_name = session["name"]
                 try:
                     message_req = requests.get(
-                        "http://server:8000/session/" + session["_id"]
+                        "http://localhost:8000/session/" + session["_id"]
                     )
 
                     if message_req.status_code == 404:
@@ -199,6 +274,7 @@ with st.sidebar:
                         st.session_state.session_id = session["_id"]
                         st.session_state.session_uid = session["uuid"]
                         st.session_state.ghost_session = False
+                        st.session_state.show_header = False
                         st.session_state.chat_holder = -1
                         st.session_state.messages = message_req.json()["session"][
                             "messages"
@@ -228,17 +304,17 @@ if "session_id" not in st.session_state:
     st.session_state.session_name = ""
     st.session_state.messages = []
 
+display_session_actions()
 
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-display_session_actions()
 if prompt := st.chat_input("", key="chat", accept_file="multiple"):
     if st.session_state.session_id == "" and not st.session_state.ghost_session:
         try:
             new_session = requests.post(
-                url="http://server:8000/session/create",
+                url="http://localhost:8000/session/create",
                 json={"prompt": prompt.text},
             )
 
@@ -263,7 +339,7 @@ if prompt := st.chat_input("", key="chat", accept_file="multiple"):
         if not st.session_state.ghost_session:
             try:
                 add_msg_response = requests.put(
-                    url="http://server:8000/session/msg/"
+                    url="http://localhost:8000/session/msg/"
                     + st.session_state.session_id
                     + "/"
                     + st.session_state.session_uid,
@@ -291,7 +367,7 @@ if prompt := st.chat_input("", key="chat", accept_file="multiple"):
     with st.chat_message("assistant"):
         try:
             response = requests.post(
-                url="http://server:8000/agent/chat",
+                url="http://localhost:8000/agent/chat",
                 json={
                     "session_id": st.session_state.session_id,
                     "user_id": st.session_state.user_id,
@@ -310,7 +386,7 @@ if prompt := st.chat_input("", key="chat", accept_file="multiple"):
 
             if not st.session_state.ghost_session:
                 add_msg_response = requests.put(
-                    url="http://server:8000/session/msg/"
+                    url="http://localhost:8000/session/msg/"
                     + st.session_state.session_id
                     + "/"
                     + st.session_state.session_uid,

@@ -35,31 +35,29 @@ async def lifespan(app: FastAPI):
 
         OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "")
 
-        agent.LLM = ChatOllama(
+        reason = ChatOllama(
             model="qwen3.5:4b",
             base_url=OLLAMA_BASE_URL,
             keep_alive=-1,
             reasoning=True,
             verbose=True,
         )
-        agent.LLM_NO_REASONING = ChatOllama(
+        no_reason = ChatOllama(
             model="qwen3.5:4b",
             base_url=OLLAMA_BASE_URL,
             keep_alive=-1,
             reasoning=False,
             verbose=True,
         )
+
         embed = OllamaEmbeddings(
             model="nomic-embed-text", base_url=OLLAMA_BASE_URL, keep_alive=-1
         )
 
-        agent.MODEL = agent.create_model()
+        agent.MODEL = agent.create_model(no_reason, reason, tools, system_prompt)
 
         emb.EMB_MODEL = emb.create_emb_model(embed)
         qdrant.QDRANT_DATABASE = qdrant.create_qdrant_database(emb.get_emb_model())
-
-        agent_graph = agent.build_agent(agent.LLM, tools, system_prompt)
-        agent.GRAPH = agent.build_graph(agent_graph)
 
         worker = asyncio.create_task(qdrant.QDRANT_DATABASE.worker())
 
