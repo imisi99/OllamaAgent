@@ -184,15 +184,17 @@ class Database:
     def fetch_user(self, user_id: str) -> User | None:
         result = self.user_collection.find_one({"_id": ObjectId(user_id)})
         if result is not None:
-            if not all(k in result for k in ("name", "memory")):
-                return None
-            return cast(User, result)
-
+            user: User = {
+                "_id": str(result["_id"]),
+                "name": result["name"],
+                "memory": result["memory"],
+            }
+            return user
         return None
 
     def update_user_name(self, user_id: str, name: str) -> bool:
         result = self.user_collection.update_one(
-            {"_id": ObjectId(user_id)}, {"name": name}
+            {"_id": ObjectId(user_id)}, {"$set": {"name": name}}
         )
 
         if result.modified_count == 0:
