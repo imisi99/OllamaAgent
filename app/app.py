@@ -1,5 +1,6 @@
 from datetime import datetime
 import logging
+import time
 import random
 import requests
 import streamlit as st
@@ -11,28 +12,46 @@ if "show_header" not in st.session_state:
 
 if st.session_state.show_header:
     with st.header(""):
-        col1, col2 = st.columns(2)
+        col1, col2 = st.columns([3, 0.5])
         with col1:
             st.header(":red[Ollama] :grey[_Agent_]", divider="grey", width="content")
+        with col2:
+            if (
+                "session_id" not in st.session_state
+                or st.session_state.session_id == ""
+            ):
+                if st.button(
+                    label="Ghost",
+                    help="This creates a temporary chat that is not stored.",
+                    type="tertiary",
+                ):
+                    st.session_state.ghost_session = True
+                    st.rerun()
 chat_holders = [
     "What's on your mind ?",
     "How can i help you today ?",
     "Back at it again !",
 ]
 
-# TODO: Use Expanded for the user profile settings probably
-# Is it possible to clear the notification of info, error and warning
+# TODO:
 # The name in the extend stuff doesn't show it after first instance
 
 # DONE:
 # The Delete does work but it doesn't clear from the sidebar until refreshed also delete from cache also
 # The Rename isn't doing anything
+# Is it possible to clear the notification of info, error and warning
+# Use Expanded for the user profile settings probably
+# Fix the Update memory button to work with the new dialog rep
+# Rewrite the pop up to use dialog for the collection of inputs (Can change the memory view)
+# Rewrite the create user using dialog
 
 
 def user_profile():
     with st.sidebar:
         with st.expander("⚙️ " + st.session_state.user_name, width=300):
-            with st.popover("Rename"):
+
+            @st.dialog("Change your username")
+            def rename_user():
                 new_name = st.text_input("Enter New Username")
                 if st.button("Confirm", key="confirm_user_rename"):
                     if new_name:
@@ -43,10 +62,8 @@ def user_profile():
                                 + "/update/"
                                 + new_name.strip()
                             )
-
                             if rename_user.status_code == 202:
                                 st.session_state.user_name = new_name.strip()
-                                st.session_state.show_rename_popover = False
                                 st.rerun()
 
                             else:
@@ -55,8 +72,15 @@ def user_profile():
                             logging.error(
                                 f"An error occured while making a request to the server -> {e}"
                             )
-            with st.popover("Memory"):
-                memory = {}
+
+            if st.button("Rename"):
+                rename_user()
+
+            @st.dialog("View Memory")
+            def user_memory():
+                if "user_memory" not in st.session_state:
+                    st.session_state.user_memory = {}
+
                 try:
                     memory_req = requests.get(
                         url="http://localhost:8000/user/me/" + st.session_state.user_id
@@ -66,7 +90,9 @@ def user_profile():
                         st.toast("Unable to find user.")
 
                     elif memory_req.status_code == 200:
-                        memory = memory_req.json()["user"]["memory"]
+                        st.session_state.user_memory = memory_req.json()["user"][
+                            "memory"
+                        ]
 
                 except Exception as e:
                     logging.error(
@@ -74,17 +100,17 @@ def user_profile():
                     )
                     st.error(f"Failed to complete request to server -> {e}")
 
-                for key, value in memory.items():
-                    col1, col2, col3 = st.columns(3)
+                for key, value in st.session_state.user_memory.items():
+                    col1, col2, col3 = st.columns([0.6, 0.30, 0.20])
                     with col1:
                         with st.popover(key):
-                            st.popover(value)
+                            st.markdown(value)
                     with col2:
-                        if st.button("Update", key=key):
+                        with st.popover("Update"):
                             newValue = st.text_input(
-                                label="change the content", value=value
+                                label="Nil", value=value, label_visibility="hidden"
                             )
-                            if newValue:
+                            if st.button("Confirm") and newValue:
                                 try:
                                     update_req = requests.put(
                                         url="http://localhost:8000/user/"
@@ -96,8 +122,13 @@ def user_profile():
                                         },
                                     )
 
-                                    if update_req.status_code == 200:
+                                    if update_req.status_code == 202:
+                                        st.session_state.user_memory[key] = value
                                         st.toast("Memory updated successfully.")
+                                        with st.spinner("..."):
+                                            time.sleep(0.5)
+                                        st.rerun()
+
                                     else:
                                         st.toast(
                                             f"Failed to update memory -> {update_req.json()}"
@@ -108,7 +139,7 @@ def user_profile():
                                     )
                                     st.error(f"Failed to update memory -> {e}")
                     with col3:
-                        if st.button("Delete", key=key + key):
+                        if st.button("Delete"):
                             try:
                                 delete_req = requests.delete(
                                     url="http://localhost:8000/user/"
@@ -118,7 +149,11 @@ def user_profile():
                                 )
 
                                 if delete_req.status_code == 202:
+                                    st.session_state.user_memory.pop(key)
                                     st.toast("Memory deleted successfully.")
+                                    with st.spinner("..."):
+                                        time.sleep(0.5)
+                                    st.rerun()
 
                                 else:
                                     st.toast(
@@ -131,12 +166,56 @@ def user_profile():
                                 )
                                 st.error(f"Failed to delete memory -> {e}")
 
+            @st.dialog("Add a memory")
+            def add_memory():
+                key = st.text_input("Enter the key")
+                value = st.text_input("Enter the value")
+
+                if st.button("Add Memory"):
+                    if key and value:
+                        try:
+                            add_mem_req = requests.put(
+                                url="http://localhost:8000/user/"
+                                + st.session_state.user_id
+                                + "/update/memory",
+                                json={"key": key, "value": value},
+                            )
+
+                            if add_mem_req.status_code == 202:
+                                st.session_state.user_memory[key] = value
+                                st.rerun()
+
+                            else:
+                                st.toast(
+                                    f"Unable to create new memory, err -> {add_mem_req.json()}"
+                                )
+
+                        except Exception as e:
+                            logging.error(
+                                f"Failed to complete request to server -> {e}"
+                            )
+                            st.error(f"Failed to create memory -> {e}")
+
+            memCol, addCol = st.columns(2)
+
+            with memCol:
+                if st.button("Memory"):
+                    user_memory()
+
+            with addCol:
+                if st.button("Add"):
+                    add_memory()
+
 
 def display_session_actions():
     if st.session_state.session_id != "" and not st.session_state.ghost_session:
         with st.expander(label=st.session_state.session_name, width=230):
-            with st.popover("Rename"):
-                new_name = st.text_input("Enter New Name", value="")
+
+            @st.dialog("Rename Session")
+            def rename_sess():
+                new_name = st.text_input(
+                    "Enter New Name", value=st.session_state.session_name
+                )
                 if st.button("Confirm", key="confirm_rename"):
                     if new_name:
                         try:
@@ -154,7 +233,7 @@ def display_session_actions():
                                 st.session_state.update_view = True
                                 st.rerun()
                             else:
-                                st.error(
+                                st.toast(
                                     f"Failed to rename session -> {rename_req.json()['msg']}"
                                 )
 
@@ -163,7 +242,9 @@ def display_session_actions():
                                 f"An error occured while making a request to the server -> {e}"
                             )
                             st.error(f"Failed to complete request to server -> {e}")
-            with st.popover("Delete"):
+
+            @st.dialog("Delete Session")
+            def delete_sess():
                 if st.button("Confirm", key="confirm_delete"):
                     try:
                         delete_req = requests.delete(
@@ -185,14 +266,20 @@ def display_session_actions():
                             st.error(
                                 f"Failed to delete session -> {delete_req.json()['msg']}"
                             )
-                            st.stop()
 
                     except Exception as e:
                         logging.error(
                             f"An error occured while making a request to the server -> {e}"
                         )
                         st.error(f"Failed to complete request to server -> {e}")
-                        st.stop()
+
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("Rename"):
+                    rename_sess()
+            with col2:
+                if st.button("Delete"):
+                    delete_sess()
 
 
 def get_or_create_user():
@@ -205,32 +292,41 @@ def get_or_create_user():
                 st.session_state.user_name = user_req.json()["name"]
                 st.rerun()
             elif user_req.status_code == 404:
-                st.info(user_req.json()["msg"])
-                if prompt := st.chat_input("Create a new user"):
-                    try:
-                        new_user_req = requests.post(
-                            url="http://localhost:8000/user/create/" + prompt.strip()
-                        )
 
-                        if new_user_req.status_code == 201:
-                            st.session_state.user_id = new_user_req.json()["id"]
-                            st.session_state.user_name = prompt.strip()
-                            st.rerun()
-                        else:
-                            st.error(new_user_req.json()["msg"])
-                            st.stop()
-                    except Exception as e:
-                        logging.error(
-                            f"An error occured while making a request to the server -> {e}"
-                        )
-                        st.error("Failed to create a new user")
-                        st.stop()
-                else:
+                @st.dialog("Create a new user.", dismissible=False)
+                def create_user():
+                    username = st.text_input("Create user")
+                    if st.button("Create") and username:
+                        try:
+                            new_user_req = requests.post(
+                                url="http://localhost:8000/user/create/"
+                                + username.strip()
+                            )
+
+                            if new_user_req.status_code == 201:
+                                st.session_state.user_id = new_user_req.json()["id"]
+                                st.session_state.user_name = username.strip()
+                                st.toast("User created successfully.")
+                                with st.spinner("..."):
+                                    time.sleep(0.5)
+                                st.rerun()
+                            else:
+                                st.toast(
+                                    f"Unable to create user -> {new_user_req.json()}"
+                                )
+                                st.error(new_user_req.json())
+                        except Exception as e:
+                            logging.error(
+                                f"An error occured while making a request to the server -> {e}"
+                            )
+                            st.error(f"Failed to create a new user -> {e}")
                     st.info("You have to create a new user")
                     st.stop()
 
+                create_user()
+
             else:
-                st.error("Failed to retrieve user.")
+                st.error(f"Failed to retrieve user -> {user_req.json()}")
                 st.stop()
 
         except Exception as e:
@@ -454,6 +550,7 @@ if "session_id" not in st.session_state:
     st.session_state.messages = []
 
 
+display_session_actions()
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])

@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import os
-import httpx
+import requests
 from langchain_ollama import ChatOllama, OllamaEmbeddings
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
@@ -15,7 +15,9 @@ from app.user import user
 
 logging.basicConfig(level=logging.INFO)
 
-# TODO: Make a choice of using the async or sync of the datastores
+# TODO:
+# Fix the issue with the qdrant queue on shutdown
+#
 
 
 @asynccontextmanager
@@ -67,17 +69,14 @@ async def lifespan(app: FastAPI):
         )
         raise RuntimeError(f"Failed to startup app -> {e}")
     yield
-    async with httpx.AsyncClient() as client:
-        base_url = os.getenv("OLLAMA_BASE_URL", "")
-        await client.post(
-            f"{base_url}/api/chat",
-            json={"model": "qwen3.5:4b", "keep_alive": 0},
-        )
-
-        await client.post(
-            f"{base_url}/api/embeddings",
-            json={"model": "nomic-embed-text", "keep_alive": 0},
-        )
+    base_url = os.getenv("OLLAMA_BASE_URL", "")
+    requests.post(
+        url=f"{base_url}/api/chat", json={"model": "qwen3.5:4b", "keep_alive": 0}
+    )
+    requests.post(
+        f"{base_url}/api/embeddings",
+        json={"model": "nomic-embed-text", "keep_alive": 0},
+    )
     await (
         qdrant.QDRANT_DATABASE.finish_queue()
     ) if qdrant.QDRANT_DATABASE is not None else None

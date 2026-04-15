@@ -11,7 +11,9 @@ from db.redis import get_redis_database
 from schemas.agent import SessionState
 from schemas.mongo import Message
 
-# TODO:The prompt length is a factor causing slow response from the agent (reduce it)
+# TODO:
+# The prompt length is a factor causing slow response from the agent (reduce it)
+# Work on adding the files also for the agent
 
 
 class Model:
@@ -83,6 +85,7 @@ class Model:
                 }
             )
 
+            logging.info(response)
             self.log_llm_response(response["messages"][-1], "AGENT")
 
             get_redis_database().add_short_term_memory(
