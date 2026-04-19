@@ -16,6 +16,10 @@ from schemas.session import CreateSession
 session = APIRouter()
 
 
+# TODO:
+# The ghost chat fails to start conversation because of the preload of memory from mongo in redis
+
+
 @session.post("/session/create")
 def create_session(
     prompt: CreateSession,
@@ -50,7 +54,7 @@ def create_session(
         logging.error(f"Failed to create session, An error occured -> {e}")
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"msg": "Failed to create the session."},
+            content={"msg": f"Failed to create the session -> {e}."},
         )
 
 
@@ -75,10 +79,10 @@ def rename(
         )
 
     except Exception as e:
-        logging.error(f"Failed to rename session, An errro occured -> {e}")
+        logging.error(f"Failed to rename session, An error occured -> {e}")
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"msg": "Failed to rename the session."},
+            content={"msg": f"Failed to rename the session -> {e}."},
         )
 
 
@@ -107,7 +111,7 @@ def add_message(
         )
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"msg": "Failed to add message to session."},
+            content={"msg": f"Failed to add message to session -> {e}."},
         )
 
 
@@ -129,7 +133,7 @@ def fetch_all_session_preview(db: Database = Depends(get_mongo_database)):
         logging.error(f"Failed to retrieve sessions for preview -> {e}")
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"msg": "Failed to fetch sessions."},
+            content={"msg": f"Failed to fetch sessions -> {e}."},
         )
 
 
@@ -173,7 +177,7 @@ def fetch_single_session(session_id: str, db: Database = Depends(get_mongo_datab
         logging.error(f"Failed to retrieve session -> {e}")
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"msg": "Failed to fetch session."},
+            content={"msg": f"Failed to fetch session -> {e}."},
         )
 
 
@@ -199,5 +203,5 @@ def delete_session(
         logging.error(f"Failed to delete session with id -> {session_id}, error -> {e}")
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"msg": "Failed to delete the session."},
+            content={"msg": f"Failed to delete session -> {e}."},
         )

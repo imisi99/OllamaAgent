@@ -28,7 +28,7 @@ def get_user_id(db: Database = Depends(get_mongo_database)):
         logging.error(f"An error occured while trying to get user id -> {e}")
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"msg": "Failed to retrieve user id."},
+            content={"msg": f"Failed to retrieve user id -> {e}."},
         )
 
 
@@ -45,7 +45,7 @@ def create_user(username: str, db: Database = Depends(get_mongo_database)):
         logging.error(f"An error occured while trying to create new user -> {e}")
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"msg": "Failed to create new user."},
+            content={"msg": f"Failed to create new user -> {e}."},
         )
 
 
@@ -65,7 +65,7 @@ def get_user(id: str, db: Database = Depends(get_mongo_database)):
         logging.error(f"An error occured while trying to retrieve user -> {e}")
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"msg": "Failed to retrieve user."},
+            content={"msg": f"Failed to retrieve user -> {e}"},
         )
 
 
@@ -86,7 +86,7 @@ def update_memory(
         logging.error(f"An error occured while trying to update memory -> {e}")
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"msg": "Failed to update memory."},
+            content={"msg": f"Failed to update memory -> {e}."},
         )
 
 
@@ -105,7 +105,7 @@ def update_username(id: str, name: str, db: Database = Depends(get_mongo_databas
         logging.error(f"An error occured while trying to update username -> {e}")
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"msg": "Failed to update username."},
+            content={"msg": f"Failed to update username -> {e}."},
         )
 
 
@@ -126,5 +126,5 @@ def delete_memory(id: str, key: str, db: Database = Depends(get_mongo_database))
         logging.error(f"An error occured while trying to update memory -> {e}")
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"msg": "Failed to update memory."},
+            content={"msg": f"Failed to delete memory -> {e}."},
         )

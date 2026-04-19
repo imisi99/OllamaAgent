@@ -6,6 +6,9 @@ from langchain.tools import tool
 from db.mongo import get_mongo_database
 from db.qdrant import get_qdrant_database
 
+# TODO:
+# The searching of the web doesn't work when offline(should return a message saying offline)
+
 
 @tool(parse_docstring=True)
 def get_user_info(user_id: str) -> str:
@@ -57,7 +60,7 @@ def remove_insight_about_user(user_id: str, key: str) -> str:
 
 
 @tool(parse_docstring=True)
-def web_search(query: str, max_results: int = 5) -> list[dict]:
+def web_search(query: str, max_results: int = 5) -> list[dict] | str:
     """
     This make a web search using the query and max results (The max results defaults to 5)
 

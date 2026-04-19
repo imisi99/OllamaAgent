@@ -12,7 +12,10 @@ from schemas.agent import SessionState
 from schemas.mongo import Message
 
 # TODO:
+# The agent logging for the reasoning doesn't work with tool calls cause reasoning is done then
 # The prompt length is a factor causing slow response from the agent (reduce it)
+# Add parameters to the agent also like the session id and user id
+# Work on the streaming of the response
 # Work on adding the files also for the agent
 
 

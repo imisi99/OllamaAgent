@@ -144,9 +144,6 @@ class Database:
             {"_id": ObjectId(session_id)}, {"$set": {"name": name}}
         )
 
-        if result.modified_count == 0:
-            return False
-
         return result.acknowledged
 
     def add_messages(self, session_id: str, message: Message) -> bool:
