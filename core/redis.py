@@ -19,10 +19,10 @@ class Redis:
         self,
         session_id: str,
         message: Union[Message, list[Message]],
-        preload: bool = False,
+        dont_preload: bool = False,
     ):
         prev_messages = None
-        if not preload:
+        if not dont_preload:
             if not self.has_short_term_memory(session_id):
                 session = self.mongoDB.fetch_session(session_id)
                 if session is not None:
@@ -59,7 +59,7 @@ class Redis:
         sessions = self.mongoDB.fetch_all_session()
         for session in sessions:
             self.add_short_term_memory(
-                session["_id"], session["messages"], preload=True
+                session["_id"], session["messages"], dont_preload=True
             )
 
     def clear_all_memory(self):

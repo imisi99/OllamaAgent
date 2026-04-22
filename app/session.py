@@ -16,10 +16,6 @@ from schemas.session import CreateSession
 session = APIRouter()
 
 
-# TODO:
-# The ghost chat fails to start conversation because of the preload of memory from mongo in redis
-
-
 @session.post("/session/create")
 def create_session(
     prompt: CreateSession,

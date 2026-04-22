@@ -216,6 +216,9 @@ class Qdrant:
             logging.error(f"Failed to delete point with id -> {id} result -> {result}")
         return success
 
+    async def add_document(self, session_id: str) -> bool:
+        return False
+
     def add_job(self, task: Task):
         self.jobs.put_nowait(task)
 

@@ -17,7 +17,6 @@ logging.basicConfig(level=logging.INFO)
 
 # TODO:
 # Fix the issue with the qdrant queue on shutdown
-#
 
 
 @asynccontextmanager

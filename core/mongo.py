@@ -39,6 +39,8 @@ class Database:
                         "content": msg["content"],
                         "role": msg["role"],
                         "timestamp": msg["timestamp"],
+                        "images": msg["images"],
+                        "files": msg["files"],
                     }
                 )
 
@@ -69,6 +71,8 @@ class Database:
                     {
                         "content": msg["content"],
                         "role": msg["role"],
+                        "images": msg["images"],
+                        "files": msg["files"],
                         "timestamp": msg["timestamp"],
                     }
                 )
@@ -85,6 +89,7 @@ class Database:
 
         return result
 
+    # Fetch in order of last message datetime
     def fetch_all_session_preview(self) -> list[Session]:
         sessions = []
 
@@ -121,11 +126,15 @@ class Database:
             message: list[Message] = []
             for msg in session["messages"]:
                 message.append(
-                    {
-                        "content": msg["content"],
-                        "role": msg["role"],
-                        "timestamp": msg["timestamp"],
-                    }
+                    Message(
+                        {
+                            "content": msg["content"],
+                            "role": msg["role"],
+                            "timestamp": msg["timestamp"],
+                            "images": msg["images"],
+                            "files": msg["files"],
+                        }
+                    )
                 )
             result.append(
                 {

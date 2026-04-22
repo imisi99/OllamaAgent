@@ -1,13 +1,11 @@
 import json
+import logging
 import httpx
 from typing import Any
 from langchain.tools import tool
 
 from db.mongo import get_mongo_database
 from db.qdrant import get_qdrant_database
-
-# TODO:
-# The searching of the web doesn't work when offline(should return a message saying offline)
 
 
 @tool(parse_docstring=True)
@@ -68,12 +66,22 @@ def web_search(query: str, max_results: int = 5) -> list[dict] | str:
         query: The search query to use for the web search
         max_results: The maximum number of contents to return from the web search
     """
-    resp = httpx.get(
-        "http://searxng:8080/search",
-        params={"q": query, "format": "json", "engines": "google,bing,duckduckgo"},
-    )
+    try:
+        resp = httpx.get(
+            "http://searxng:8080/search",
+            params={"q": query, "format": "json", "engines": "google,bing,duckduckgo"},
+        )
+    except Exception as e:
+        logging.info(
+            f"[TOOL WEB_SEARCH] Failed to search the web most likely due to being offline -> {e}"
+        )
+        return "The user is offline and web search is currently unavailable"
 
     results = resp.json().get("results", [])
+
+    if len(results) == 0:
+        return "The web search didn't return any result"
+
     return [
         {"title": r["title"], "url": r["url"], "content": r.get("content", "")}
         for r in results[:max_results]

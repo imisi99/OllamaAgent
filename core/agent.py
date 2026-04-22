@@ -1,12 +1,23 @@
 import logging
 from datetime import datetime
 from typing import Optional
+from langchain_core.document_loaders.base import BaseLoader
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.tools import BaseTool
+from langchain_community.document_loaders import (
+    PyPDFLoader,
+    TextLoader,
+    UnstructuredHTMLLoader,
+    UnstructuredMarkdownLoader,
+    Docx2txtLoader,
+    UnstructuredExcelLoader,
+)
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_ollama import ChatOllama
 from langchain.agents import create_agent
 from langgraph.graph import StateGraph, END
+from streamlit.runtime.uploaded_file_manager import UploadedFile
 from db.redis import get_redis_database
 from schemas.agent import SessionState
 from schemas.mongo import Message
@@ -17,6 +28,7 @@ from schemas.mongo import Message
 # Add parameters to the agent also like the session id and user id
 # Work on the streaming of the response
 # Work on adding the files also for the agent
+# Add a tool logging procedure also
 
 
 class Model:
@@ -40,7 +52,7 @@ class Model:
             session_id = state["session_id"]
             message = state["message"]
 
-            get_redis_database().add_short_term_memory(session_id, message)
+            get_redis_database().add_short_term_memory(session_id, message, True)
 
             return state
 
@@ -59,7 +71,10 @@ class Model:
                         "role": "system",
                         "content": f"SUMMARY: {summarized}",
                         "timestamp": datetime.now().isoformat(),
+                        "images": [("", "")],
+                        "files": [("", "")],
                     },
+                    True,
                 )
             return state
 
@@ -89,7 +104,7 @@ class Model:
             )
 
             logging.info(response)
-            self.log_llm_response(response["messages"][-1], "AGENT")
+            self.log_llm_response(response["messages"], "AGENT")
 
             get_redis_database().add_short_term_memory(
                 session_id,
@@ -97,6 +112,8 @@ class Model:
                     "role": "assistant",
                     "content": response["messages"][-1].content,
                     "timestamp": datetime.now().isoformat(),
+                    "images": [("", "")],
+                    "files": [("", "")],
                 },
             )
 
@@ -119,13 +136,43 @@ class Model:
     def chat(self, prompt: SessionState):
         return self.graph.invoke(prompt)
 
+    def load_document(self, files: list[UploadedFile]):
+        loaders = {
+            ".pdf": PyPDFLoader,
+            ".docx": Docx2txtLoader,
+            ".txt": TextLoader,
+            ".md": UnstructuredMarkdownLoader,
+            ".html": UnstructuredHTMLLoader,
+            ".xlsx": UnstructuredExcelLoader,
+        }
+
+        docs = []
+        for file in files:
+            name = str(file.name)
+            ext = name.split(".")[-1]
+            loader = loaders.get(ext)
+            if not loader:
+                raise ValueError(f"Failed to load file, Unsupported file type: {ext}")
+            docs.append(loader(file))
+
+        print(docs)
+        return docs
+
     def log_llm_response(self, response, label: str = "LLM"):
-        reasoning = response.additional_kwargs.get("reasoning_content", None)
+        reasoning = response[-1].additional_kwargs.get("reasoning_content", None)
         content = response.content
         metadata = response.response_metadata
 
         if reasoning:
-            logging.info(f"[{label}] THINKING: \n {reasoning}")
+            thoughts = []
+            for thought in reversed(response):
+                if isinstance(thought, HumanMessage):
+                    break
+                reason = thought.additional_kwargs.get("reasoning_content", None)
+                if reason:
+                    thoughts.append(reason)
+
+            logging.info(f"[{label}] THINKING: \n {''.join(reversed(thoughts))}")
 
         if isinstance(content, str):
             logging.info(f"[{label}] RESPONSE: {content}")

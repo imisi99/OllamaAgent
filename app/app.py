@@ -1,6 +1,5 @@
 import logging
 import time
-import random
 from typing import cast
 import requests
 import streamlit as st
@@ -10,10 +9,30 @@ from datetime import datetime
 from streamlit.elements.widgets.chat import ChatInputValue
 
 
+# TODO:
+# Moving between chats between conversations Doesn't get the chat stored (should a single API call be chained to use it ?)
+# Adding the metrics (reasoning content, tool calls in the view also ? )
+
+# DONE:
+# Also add the session action to first be untitled.
+# Have a toggle between ghost and normal chat before starting a session
+# After deleting a session move back to the new chat
+# Walk through the ghost session and see if it works
+# Add a clear header if still show header after the first chat
+# The Delete does work but it doesn't clear from the sidebar until refreshed also delete from cache also
+# The Rename isn't doing anything
+# Is it possible to clear the notification of info, error and warning
+# Use Expanded for the user profile settings probably
+# Fix the Update memory button to work with the new dialog rep
+# Rewrite the pop up to use dialog for the collection of inputs (Can change the memory view)
+# Rewrite the create user using dialog
+# The name in the extend stuff doesn't show it after first instance
+
+
 def header():
     if st.session_state.show_header:
         with st.header(""):
-            col1, col2 = st.columns([3, 0.5])
+            col1, col2 = st.columns([3, 1.0])
             with col1:
                 st.header(
                     ":red[Ollama] :grey[_Agent_]", divider="grey", width="content"
@@ -23,39 +42,13 @@ def header():
                     "session_id" not in st.session_state
                     or st.session_state.session_id == ""
                 ):
-                    if st.button(
+                    if st.toggle(
                         label="Ghost",
                         help="This creates a temporary chat that is not stored.",
-                        type="tertiary",
                     ):
                         st.session_state.ghost_session = True
-                        st.rerun(scope="fragment")
-
-
-chat_holders = [
-    "What's on your mind ?",
-    "How can i help you today ?",
-    "Back at it again !",
-]
-
-# TODO:
-# Add a clear header if still show header after the first chat
-# Walk through the ghost session and see if it works
-# Have a toggle between ghost and normal chat before starting a session
-# After deleting a session move back to the new chat
-# Moving between chats between conversations Doesn't get the chat stored (should a single API call be chained to use it ?)
-# Adding the metrics (reasoning content, tool calls in the view also ? )
-# Also add the session action to first be untitled.
-
-# DONE:
-# The Delete does work but it doesn't clear from the sidebar until refreshed also delete from cache also
-# The Rename isn't doing anything
-# Is it possible to clear the notification of info, error and warning
-# Use Expanded for the user profile settings probably
-# Fix the Update memory button to work with the new dialog rep
-# Rewrite the pop up to use dialog for the collection of inputs (Can change the memory view)
-# Rewrite the create user using dialog
-# The name in the extend stuff doesn't show it after first instance
+                    else:
+                        st.session_state.ghost_session = False
 
 
 def user_profile():
@@ -264,8 +257,13 @@ def user_profile():
 
 
 def display_session_actions():
-    if st.session_state.session_id != "" and not st.session_state.ghost_session:
-        with st.expander(label=st.session_state.session_name, width=230):
+    if not st.session_state.ghost_session and not st.session_state.show_header:
+        name = ""
+        if st.session_state.session_id == "":
+            name = "Untitled"
+        else:
+            name = st.session_state.session_name
+        with st.expander(label=name, width=230):
 
             @st.dialog("Rename Session")
             def rename_sess():
@@ -429,7 +427,6 @@ def session_sidebar():
             st.session_state.session_uid = ""
             st.session_state.show_header = True
             st.session_state.messages = []
-            st.session_state.chat_holder = random.randint(0, len(chat_holders) - 1)
             st.rerun()
 
         if "sessions_fetched" not in st.session_state or st.session_state.get(
@@ -477,7 +474,6 @@ def session_sidebar():
                                 st.session_state.session_uid = session["uuid"]
                                 st.session_state.ghost_session = False
                                 st.session_state.show_header = False
-                                st.session_state.chat_holder = -1
                                 st.session_state.messages = message_req.json()[
                                     "session"
                                 ]["messages"]
@@ -515,7 +511,6 @@ def chat():
             st.session_state.session_id == "" or st.session_state.ghost_session
         ):
             st.session_state.show_header = False
-            st.session_state.chat_holder = -1
             st.session_state.stored_prompt = prompt
             st.rerun()
 
@@ -542,7 +537,6 @@ def chat():
                     st.session_state.session_id = new_session.json()["id"]
                     st.session_state.session_uid = new_session.json()["uid"]
                     st.session_state.session_name = new_session.json()["title"]
-                    st.session_state.chat_holder = -1
                     st.session_state.update_view = True
 
                 except Exception as e:
@@ -665,8 +659,6 @@ def display_session_message():
 if "show_header" not in st.session_state:
     st.session_state.show_header = True
 
-if "chat_holder" not in st.session_state:
-    st.session_state.chat_holder = random.randint(0, len(chat_holders) - 1)
 
 if "ghost_session" not in st.session_state:
     st.session_state.ghost_session = False
@@ -684,8 +676,6 @@ if "session_id" not in st.session_state:
 
 header()
 
-if st.session_state.chat_holder != -1:
-    st.subheader(chat_holders[st.session_state.chat_holder])
 
 get_or_create_user()
 user_profile()
