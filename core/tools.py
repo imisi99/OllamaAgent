@@ -1,57 +1,57 @@
 import json
 import logging
 import httpx
-from typing import Any
-from langchain.tools import tool
+from typing import Annotated, Any
+from langchain.tools import InjectedState, tool
 
 from db.mongo import get_mongo_database
 from db.qdrant import get_qdrant_database
+from schemas.agent import SessAgentState
 
 
 @tool(parse_docstring=True)
-def get_user_info(user_id: str) -> str:
+def get_user_info(state: Annotated[SessAgentState, InjectedState]) -> str:
     """
     Retrieves details about the user from the db that you might have written in the past.
-
-    Args:
-        user_id: This is the user id.
     """
-    user = get_mongo_database().fetch_user(user_id)
+    user = get_mongo_database().fetch_user(state["user_id"])
     if user is None:
         return "The user was not found"
     return json.dumps(user)
 
 
 @tool(parse_docstring=True)
-def save_insight_about_user(user_id: str, key: str, value: Any) -> str:
+def save_insight_about_user(
+    key: str, value: Any, state: Annotated[SessAgentState, InjectedState]
+) -> str:
     """
     This saves important information about the user or things that you've noticed about the user
     The memory is of type dict[str, Any] so a key is needed for the insight discovered
     You can view the current state using get_user_info.
 
     Args:
-        user_id: This is the user id.
         key: The key of the value to store.
         value: The value being stored.
     """
-    updated = get_mongo_database().update_user_memory(user_id, key, value)
+    updated = get_mongo_database().update_user_memory(state["user_id"], key, value)
     if updated:
         return "Operation was successful"
     return "Operation was unsuccessful"
 
 
 @tool(parse_docstring=True)
-def remove_insight_about_user(user_id: str, key: str) -> str:
+def remove_insight_about_user(
+    key: str, state: Annotated[SessAgentState, InjectedState]
+) -> str:
     """
     This removes information about the user or things that you've noticed about the user
     The memory is of type dict[str, Any] so a key is needed for the insight to remove
     You can view the current state using get_user_info.
 
     Args:
-        user_id: This is the user id.
         key: The key of the value to remove.
     """
-    removed = get_mongo_database().remove_user_memory(user_id, key)
+    removed = get_mongo_database().remove_user_memory(state["user_id"], key)
     if not removed:
         return "Operation was unsuccessful"
     return "Operation was successful"
@@ -91,7 +91,7 @@ def web_search(query: str, max_results: int = 5) -> list[dict] | str:
 # TODO: Also allow for the model to choose to summarize the chat ?
 @tool(parse_docstring=True)
 async def find_related_sessions(
-    session_id: str,
+    state: Annotated[SessAgentState, InjectedState],
     query: str = "",
     use_query: bool = False,
     score_threshold: float = 50.0,
@@ -109,7 +109,7 @@ async def find_related_sessions(
         limit: This is the limit for the number of sessions to retrieve it might retrieve lower than the limit if few document pass the threshold (this defaults to 2)
     """
     result = await get_qdrant_database().get_related_points(
-        session_id, query, score_threshold, use_query, limit
+        state["session_id"], query, score_threshold, use_query, limit
     )
 
     if result is None:

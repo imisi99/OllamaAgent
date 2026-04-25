@@ -55,11 +55,12 @@ async def lifespan(app: FastAPI):
             model="nomic-embed-text", base_url=OLLAMA_BASE_URL, keep_alive=-1
         )
 
-        agent.MODEL = agent.create_model(no_reason, reason, tools, system_prompt)
-
         emb.EMB_MODEL = emb.create_emb_model(embed)
         qdrant.QDRANT_DATABASE = qdrant.create_qdrant_database(emb.get_emb_model())
 
+        agent.MODEL = agent.create_model(
+            no_reason, reason, tools, system_prompt, qdrant.QDRANT_DATABASE
+        )
         worker = asyncio.create_task(qdrant.QDRANT_DATABASE.worker())
 
     except Exception as e:

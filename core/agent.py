@@ -1,7 +1,9 @@
 import logging
+import os
+import tempfile
 from datetime import datetime
 from typing import Optional
-from langchain_core.document_loaders.base import BaseLoader
+from langchain_core.documents import Document
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.tools import BaseTool
@@ -13,13 +15,15 @@ from langchain_community.document_loaders import (
     Docx2txtLoader,
     UnstructuredExcelLoader,
 )
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter, Language
 from langchain_ollama import ChatOllama
 from langchain.agents import create_agent
 from langgraph.graph import StateGraph, END
+from pathlib import Path
 from streamlit.runtime.uploaded_file_manager import UploadedFile
+from core.qdrant import Qdrant
 from db.redis import get_redis_database
-from schemas.agent import SessionState
+from schemas.agent import SessAgentState, SessionState
 from schemas.mongo import Message
 
 # TODO:
@@ -38,21 +42,40 @@ class Model:
         llm_reason: ChatOllama,
         tool: list[BaseTool],
         prompt: SystemMessage,
+        qdrant_client: Qdrant,
     ) -> None:
         self.no_reason = llm_no_reason
         self.reason = llm_reason
         self.graph = self.build_graph(self.build_agent(tool, prompt))
+        self.qdrant_client = qdrant_client
 
     def build_agent(self, tools: list[BaseTool], prompt: SystemMessage):
-        agent = create_agent(model=self.reason, tools=tools, system_prompt=prompt)
+        agent = create_agent(
+            model=self.reason,
+            tools=tools,
+            system_prompt=prompt,
+            state_schema=SessAgentState,
+        )
         return agent
 
     def build_graph(self, agent):
         def update_memory(state: SessionState) -> SessionState:
-            session_id = state["session_id"]
-            message = state["message"]
+            get_redis_database().add_short_term_memory(
+                state["session_id"], state["message"], True
+            )
 
-            get_redis_database().add_short_term_memory(session_id, message, True)
+            return state
+
+        async def embed_and_retrieve_chunks(state: SessionState) -> SessionState:
+            if len(state["message"]["files"]) > 0:
+                chunks = self.load_document([])
+                await self.embed_and_store_chunks(state["session_uid"], chunks)
+
+            retrieved_chunks = await self.qdrant_client.retrieve_file_chunks(
+                state["message"]["content"], state["session_uid"]
+            )
+
+            state["chunks"] = retrieved_chunks
 
             return state
 
@@ -60,7 +83,7 @@ class Model:
             session_id = state["session_id"]
             redDB = get_redis_database()
             msg = redDB.get_short_term_memory(session_id)
-            if len(msg) > 25:
+            if len(msg) > 30:
                 summarized = self.summarize_messagess(msg)
                 if summarized is None:
                     return state
@@ -93,10 +116,23 @@ class Model:
                     elif role == "assistant":
                         messages.append(AIMessage(content=msg["content"]))
 
+            prompt = f"""
+            Use the following documents to answer the user question.
+            <document>
+            {state["chunks"]}
+            </document>
+
+            User Question:
+            {state["message"]["content"]}
+            """
+
+            if len(state["chunks"]) > 0:
+                messages[-1].content = prompt
+
             # TODO: Use a check for the token emitting for streaming messages with a check on the final output if it isn't then redisplay
             response = agent.invoke(
                 {
-                    "session_id": state["session_id"],
+                    "session_id": session_id,
                     "user_id": state["user_id"],
                     "ghost_session": state["ghost_session"],
                     "messages": messages,
@@ -124,11 +160,13 @@ class Model:
 
         graph.add_node("maybe_summarize", maybe_summarize)
         graph.add_node("update_memory", update_memory)
+        graph.add_node("embed_retrieve_file_chunks", embed_and_retrieve_chunks)
         graph.add_node("run_agent", run_agent)
 
         graph.set_entry_point("maybe_summarize")
         graph.add_edge("maybe_summarize", "update_memory")
-        graph.add_edge("update_memory", "run_agent")
+        graph.add_edge("update_memory", "embed_retrieve_file_chunks")
+        graph.add_edge("embed_retrieve_file_chunks", "run_agent")
         graph.add_edge("run_agent", END)
 
         return graph.compile()
@@ -136,7 +174,7 @@ class Model:
     def chat(self, prompt: SessionState):
         return self.graph.invoke(prompt)
 
-    def load_document(self, files: list[UploadedFile]):
+    def load_document(self, files: list[tuple[bytes, str]]) -> list[Document]:
         loaders = {
             ".pdf": PyPDFLoader,
             ".docx": Docx2txtLoader,
@@ -146,17 +184,44 @@ class Model:
             ".xlsx": UnstructuredExcelLoader,
         }
 
-        docs = []
-        for file in files:
-            name = str(file.name)
-            ext = name.split(".")[-1]
-            loader = loaders.get(ext)
-            if not loader:
-                raise ValueError(f"Failed to load file, Unsupported file type: {ext}")
-            docs.append(loader(file))
+        language_map = {
+            ".go": Language.GO,
+            ".py": Language.PYTHON,
+            ".java": Language.JAVA,
+            ".js": Language.JS,
+            ".rs": Language.RUST,
+        }
 
-        print(docs)
-        return docs
+        def get_splitter(ext: str) -> RecursiveCharacterTextSplitter:
+            lang = language_map.get(ext)
+            if lang:
+                return RecursiveCharacterTextSplitter.from_language(
+                    language=lang, chunk_size=512, chunk_overlap=50
+                )
+            return RecursiveCharacterTextSplitter(chunk_size=512, chunk_overlap=50)
+
+        chunks: list[Document] = []
+        for file, name in files:
+            ext = Path(name).suffix.lower()
+            loader = loaders.get(ext) or (TextLoader if ext in language_map else None)
+            if not loader:
+                raise ValueError(f"Unsupported file type: {ext}")
+            with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
+                tmp.write(file)
+                tmp_path = tmp.name
+
+            try:
+                docs = loader(tmp_path).load()
+                splitter = get_splitter(ext)
+                chunks.extend(splitter.split_documents(docs))
+            finally:
+                os.unlink(tmp_path)
+
+        return chunks
+
+    async def embed_and_store_chunks(self, session_uid: str, chunks: list[Document]):
+        if len(chunks) > 0:
+            await self.qdrant_client.embed_chunks(session_uid, chunks)
 
     def log_llm_response(self, response, label: str = "LLM"):
         reasoning = response[-1].additional_kwargs.get("reasoning_content", None)
@@ -172,7 +237,7 @@ class Model:
                 if reason:
                     thoughts.append(reason)
 
-            logging.info(f"[{label}] THINKING: \n {''.join(reversed(thoughts))}")
+            logging.info(f"[{label}] THINKING: \n {'\n'.join(reversed(thoughts))}")
 
         if isinstance(content, str):
             logging.info(f"[{label}] RESPONSE: {content}")
@@ -238,5 +303,6 @@ def create_model(
     llm_reason: ChatOllama,
     tool: list[BaseTool],
     prompt: SystemMessage,
+    qdrant_client: Qdrant,
 ) -> Model:
-    return Model(llm_no_reason, llm_reason, tool, prompt)
+    return Model(llm_no_reason, llm_reason, tool, prompt, qdrant_client)

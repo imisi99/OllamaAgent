@@ -1,3 +1,4 @@
+import base64
 import logging
 from datetime import datetime
 from uuid import uuid4
@@ -91,6 +92,10 @@ def add_message(
     qdb: Qdrant = Depends(get_qdrant_database),
 ):
     try:
+        strFiles = message["files"]
+        for i in range(len(strFiles)):
+            strFiles[i] = (base64.b64decode(strFiles[i][0]), strFiles[i][1])
+        message["files"] = strFiles
         created = db.add_messages(session_id, message)
         if not created:
             raise Exception("MongoDB operation to add message was not acknowledged")

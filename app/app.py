@@ -1,3 +1,4 @@
+import base64
 import logging
 import time
 from typing import cast
@@ -559,6 +560,11 @@ def chat():
                                 "role": "user",
                                 "content": prompt.text,
                                 "timestamp": datetime.now().isoformat(),
+                                "files": [
+                                    (base64.b64encode(file.read()).decode(), file.name)
+                                    for file in prompt.files
+                                ],
+                                "images": [("", "")],
                             },
                         )
 
@@ -589,11 +595,17 @@ def chat():
                         url="http://localhost:8000/agent/chat",
                         json={
                             "session_id": st.session_state.session_id,
+                            "session_uid": st.session_state.session_uid,
                             "user_id": st.session_state.user_id,
                             "message": {
                                 "role": "user",
                                 "content": prompt.text,
                                 "timestamp": datetime.now().isoformat(),
+                                "images": [("", "")],
+                                "files": [
+                                    (base64.b64encode(file.read()).decode(), file.name)
+                                    for file in prompt.files
+                                ],
                             },
                             "ghost_session": st.session_state.ghost_session,
                         },
@@ -617,6 +629,8 @@ def chat():
                                 "role": "assistant",
                                 "content": response.json()["msg"],
                                 "timestamp": datetime.now().isoformat(),
+                                "images": [("", "")],
+                                "files": [("", "")],
                             },
                         )
 

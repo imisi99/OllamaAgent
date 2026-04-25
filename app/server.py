@@ -17,7 +17,9 @@ def chat_agent(input: SessionConversation, model: Model = Depends(get_model)):
             "user_id": input["user_id"],
             "message": input["message"],
             "session_id": input["session_id"],
+            "session_uid": input["session_uid"],
             "response": "",
+            "chunks": [],
         }
     )
     response = model.chat(session)

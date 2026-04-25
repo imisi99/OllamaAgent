@@ -30,9 +30,10 @@ def ensure_collections():
             get_qdrant_client().create_collection(
                 collection_name="chats",
                 vectors_config={
-                    "messages": VectorParams(
+                    "messages": VectorParams(size=VECTORSIZE, distance=Distance.COSINE),
+                    "files": VectorParams(
                         size=VECTORSIZE, distance=Distance.COSINE
-                    )  # Might have to add some other vector later on
+                    ),  # Might have to add some other vector later on
                 },
             )
 

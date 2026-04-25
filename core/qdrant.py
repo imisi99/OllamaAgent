@@ -2,8 +2,17 @@ import asyncio
 import logging
 from enum import Enum
 from typing import Union, cast
+from uuid import uuid4
+from langchain_core.documents import Document
 from qdrant_client import QdrantClient
-from qdrant_client.models import FieldCondition, Filter, MatchValue, PointStruct
+from qdrant_client.models import (
+    FieldCondition,
+    Filter,
+    MatchValue,
+    Payload,
+    PointStruct,
+    UpdateOperation,
+)
 from qdrant_client.http.models import UpdateStatus
 from .emb import EmbeddingModel
 from schemas.mongo import Message, Session
@@ -216,8 +225,68 @@ class Qdrant:
             logging.error(f"Failed to delete point with id -> {id} result -> {result}")
         return success
 
-    async def add_document(self, session_id: str) -> bool:
-        return False
+    async def embed_chunks(self, session_id: str, chunks: list[Document]) -> bool:
+        points = []
+        for chunk in chunks:
+            vector = await self.embedding.generate_vector_embedding_query(
+                chunk.page_content
+            )
+            points.append(
+                PointStruct(
+                    id=str(uuid4()),
+                    vector={"files": vector},
+                    payload={
+                        "session_id": session_id,
+                        "text": chunk.page_content,
+                        "source": chunk.metadata.get("filename", ""),
+                        "page": chunk.metadata.get("page", None),
+                    },
+                )
+            )
+
+        created = self.client.upsert(collection_name="chats", points=points)
+
+        success = created.status in (UpdateStatus.COMPLETED, UpdateStatus.ACKNOWLEDGED)
+        if not success:
+            logging.error(
+                f"Failed to create chunk point for session -> {session_id} result -> {created}"
+            )
+        return success
+
+    async def retrieve_file_chunks(
+        self,
+        query: str,
+        sess_uid: str,
+        k: int = 6,
+    ) -> list[str]:
+        vector = await self.embedding.generate_vector_embedding_query(query)
+
+        result = self.client.query_points(
+            collection_name="chats",
+            query=vector,
+            using="files",
+            limit=k,
+            query_filter=Filter(
+                must=[
+                    FieldCondition(key="session_id", match=MatchValue(value=sess_uid))
+                ]
+            ),
+        )
+
+        chunks: list[str] = []
+        score = 0
+        for point in result.points:
+            score += point.score
+            if point.payload is not None:
+                chunks.append(
+                    f"RETRIEVED CONTEXT: {point.payload['text']} \n SOURCE: {point.payload['source']} \n PAGE_NO: {point.payload['page']}"
+                )
+
+        logging.info(
+            f"Retrieved chunks with an average score of {score if len(result.points) == 0 else score / len(result.points)}"
+        )
+
+        return chunks
 
     def add_job(self, task: Task):
         self.jobs.put_nowait(task)

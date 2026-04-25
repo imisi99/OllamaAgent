@@ -4,7 +4,7 @@ from typing import Any, TypedDict
 class Message(TypedDict):
     role: str
     content: str
-    files: list[tuple[str, str]]
+    files: list[tuple[Any, str]]
     images: list[tuple[str, str]]
     timestamp: str
 
