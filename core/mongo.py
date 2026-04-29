@@ -1,4 +1,4 @@
-from typing import Any, cast
+from typing import Any
 from bson import ObjectId
 from pymongo import MongoClient
 from schemas.mongo import Message, Session, User
@@ -144,6 +144,45 @@ class Database:
                     "created_at": session["created_at"],
                     "messages": message,
                 }
+            )
+
+        return result
+
+    def fetch_all_session_exclude_files(self) -> list[Session]:
+        sessions = []
+
+        with self.session_collection.find(
+            filter={}, projection={"files": False, "images": False}
+        ) as cursor:
+            for doc in cursor:
+                sessions.append(doc)
+
+        result: list[Session] = []
+        for session in sessions:
+            message: list[Message] = []
+            for msg in session["messages"]:
+                message.append(
+                    Message(
+                        {
+                            "content": msg["content"],
+                            "role": msg["role"],
+                            "timestamp": msg["timestamp"],
+                            "images": [],
+                            "files": [],
+                        }
+                    )
+                )
+
+            result.append(
+                Session(
+                    {
+                        "_id": str(session["_id"]),
+                        "uuid": session["uuid"],
+                        "created_at": session["created_at"],
+                        "name": session["name"],
+                        "messages": message,
+                    }
+                )
             )
 
         return result

@@ -1,11 +1,17 @@
 from typing import Any, TypedDict
 
 
+class Image(TypedDict):
+    image: Any
+    mime: str
+    name: str
+
+
 class Message(TypedDict):
     role: str
     content: str
     files: list[tuple[Any, str]]
-    images: list[tuple[str, str]]
+    images: list[Image]
     timestamp: str
 
 

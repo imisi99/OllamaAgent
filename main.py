@@ -15,7 +15,7 @@ from app.user import user
 
 logging.basicConfig(level=logging.INFO)
 
-# TODO:
+# DONE:
 # Fix the issue with the qdrant queue on shutdown
 
 

@@ -8,4 +8,3 @@ pymongo==4.17.0
 qdrant-client==1.16.2
 redis==7.4.0
 uvicorn==0.40.0
-

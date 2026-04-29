@@ -96,6 +96,10 @@ def add_message(
         for i in range(len(strFiles)):
             strFiles[i] = (base64.b64decode(strFiles[i][0]), strFiles[i][1])
         message["files"] = strFiles
+
+        for image in message["images"]:
+            image["image"] = base64.b64decode(image["image"])
+
         created = db.add_messages(session_id, message)
         if not created:
             raise Exception("MongoDB operation to add message was not acknowledged")

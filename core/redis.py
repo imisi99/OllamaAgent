@@ -56,7 +56,7 @@ class Redis:
         self.client.delete(session_id)
 
     def populate_cache(self):
-        sessions = self.mongoDB.fetch_all_session()
+        sessions = self.mongoDB.fetch_all_session_exclude_files()
         for session in sessions:
             self.add_short_term_memory(
                 session["_id"], session["messages"], dont_preload=True

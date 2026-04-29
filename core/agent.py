@@ -1,10 +1,11 @@
+import base64
 import logging
 import os
 import tempfile
 from datetime import datetime
 from typing import Optional
 from langchain_core.documents import Document
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.tools import BaseTool
 from langchain_community.document_loaders import (
@@ -20,19 +21,22 @@ from langchain_ollama import ChatOllama
 from langchain.agents import create_agent
 from langgraph.graph import StateGraph, END
 from pathlib import Path
-from streamlit.runtime.uploaded_file_manager import UploadedFile
+
 from core.qdrant import Qdrant
 from db.redis import get_redis_database
 from schemas.agent import SessAgentState, SessionState
 from schemas.mongo import Message
 
 # TODO:
-# The agent logging for the reasoning doesn't work with tool calls cause reasoning is done then
 # The prompt length is a factor causing slow response from the agent (reduce it)
-# Add parameters to the agent also like the session id and user id
 # Work on the streaming of the response
+# In the logging llm response add a tools used and result and also is the time for the message the same across all the thoughts and tool calls
+
+# DONE:
+# The agent logging for the reasoning doesn't work with tool calls cause reasoning is done then
 # Work on adding the files also for the agent
 # Add a tool logging procedure also
+# Add parameters to the agent also like the session id and user id
 
 
 class Model:
@@ -68,7 +72,7 @@ class Model:
 
         async def embed_and_retrieve_chunks(state: SessionState) -> SessionState:
             if len(state["message"]["files"]) > 0:
-                chunks = self.load_document([])
+                chunks = self.load_document(state["message"]["files"])
                 await self.embed_and_store_chunks(state["session_uid"], chunks)
 
             retrieved_chunks = await self.qdrant_client.retrieve_file_chunks(
@@ -94,8 +98,8 @@ class Model:
                         "role": "system",
                         "content": f"SUMMARY: {summarized}",
                         "timestamp": datetime.now().isoformat(),
-                        "images": [("", "")],
-                        "files": [("", "")],
+                        "images": [],
+                        "files": [],
                     },
                     True,
                 )
@@ -112,7 +116,20 @@ class Model:
                     if role == "system":
                         messages.append(SystemMessage(content=msg["content"]))
                     elif role == "user":
-                        messages.append(HumanMessage(content=msg["content"]))
+                        if len(msg["images"]) > 0:
+                            content: list[str | dict] = [
+                                {
+                                    "type": "image_url",
+                                    "image_url": {
+                                        "url": f"data:{image['mime']};base64,{base64.b64encode(image['image']).decode()}"
+                                    },
+                                }
+                                for image in msg["images"]
+                            ]
+                            content.append({"type": "text", "text": msg["content"]})
+                            messages.append(HumanMessage(content=content))
+                        else:
+                            messages.append(HumanMessage(content=msg["content"]))
                     elif role == "assistant":
                         messages.append(AIMessage(content=msg["content"]))
 
@@ -148,8 +165,8 @@ class Model:
                     "role": "assistant",
                     "content": response["messages"][-1].content,
                     "timestamp": datetime.now().isoformat(),
-                    "images": [("", "")],
-                    "files": [("", "")],
+                    "images": [],
+                    "files": [],
                 },
             )
 
@@ -172,7 +189,7 @@ class Model:
         return graph.compile()
 
     def chat(self, prompt: SessionState):
-        return self.graph.invoke(prompt)
+        return self.graph.ainvoke(prompt)
 
     def load_document(self, files: list[tuple[bytes, str]]) -> list[Document]:
         loaders = {
@@ -225,19 +242,38 @@ class Model:
 
     def log_llm_response(self, response, label: str = "LLM"):
         reasoning = response[-1].additional_kwargs.get("reasoning_content", None)
-        content = response.content
-        metadata = response.response_metadata
+        content = response[-1].content
+        metadata = response[-1].response_metadata
 
         if reasoning:
             thoughts = []
+            tools_to_call = []
+            tools = []
             for thought in reversed(response):
                 if isinstance(thought, HumanMessage):
                     break
-                reason = thought.additional_kwargs.get("reasoning_content", None)
-                if reason:
-                    thoughts.append(reason)
+
+                elif isinstance(thought, ToolMessage):
+                    tools.append((thought.name, thought.content))
+                    continue
+
+                elif isinstance(thought, AIMessage):
+                    reason = thought.additional_kwargs.get("reasoning_content", None)
+                    calls = thought.tool_calls
+                    if len(calls) > 0:
+                        for call in calls:
+                            tools_to_call.append((call["name"], call["args"]))
+                    if reason:
+                        thoughts.append(reason)
 
             logging.info(f"[{label}] THINKING: \n {'\n'.join(reversed(thoughts))}")
+            logging.info(tools_to_call)
+            logging.info(
+                f"[{label}] TOOLS TO CALL: \n {'\n'.join(f'{name}: \n {"\n".join(f"{param}: \n {arg}" for param, arg in args)}' for name, args in tools_to_call)}"
+            )
+            logging.info(
+                f"[{label}] TOOLS RESPONSE: \n {'\n'.join(f'{name}: \n {resp}' for name, resp in tools)}"
+            )
 
         if isinstance(content, str):
             logging.info(f"[{label}] RESPONSE: {content}")
@@ -261,7 +297,7 @@ class Model:
 
         try:
             response = self.no_reason.invoke(prompt)
-            self.log_llm_response(response, "TITLEGEN")
+            self.log_llm_response([response], "TITLEGEN")
             if isinstance(response.content, str):
                 title = response.content
         except Exception as e:

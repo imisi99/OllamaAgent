@@ -10,7 +10,7 @@ serve = APIRouter()
 
 
 @serve.post("/agent/chat")
-def chat_agent(input: SessionConversation, model: Model = Depends(get_model)):
+async def chat_agent(input: SessionConversation, model: Model = Depends(get_model)):
     session = SessionState(
         {
             "ghost_session": input["ghost_session"],
@@ -22,6 +22,6 @@ def chat_agent(input: SessionConversation, model: Model = Depends(get_model)):
             "chunks": [],
         }
     )
-    response = model.chat(session)
+    response = await model.chat(session)
 
     return JSONResponse(status_code=200, content={"msg": response["response"]})

@@ -1,18 +1,25 @@
 import base64
 import logging
+from pathlib import Path
 import time
 from typing import cast
+from langchain_community.document_loaders import image
 import requests
 import streamlit as st
 
 from datetime import datetime
 
 from streamlit.elements.widgets.chat import ChatInputValue
+from streamlit.runtime.uploaded_file_manager import UploadedFile
 
 
 # TODO:
 # Moving between chats between conversations Doesn't get the chat stored (should a single API call be chained to use it ?)
+# (Or use a queue sort of to add messages to the stuff ? )
 # Adding the metrics (reasoning content, tool calls in the view also ? )
+# Fix the loading of file back for streamlit and also the images let it be empty if not in use
+# The title stuff not sure it changes properly
+#
 
 # DONE:
 # Also add the session action to first be untitled.
@@ -501,6 +508,43 @@ def session_sidebar():
                             st.stop()
 
 
+def filter_files(
+    upload_file: list[UploadedFile],
+) -> tuple[list[UploadedFile], list[UploadedFile]]:
+    images: list[UploadedFile] = []
+    files: list[UploadedFile] = []
+
+    file_map = set(
+        [
+            ".pdf",
+            ".docx",
+            ".txt",
+            ".md",
+            ".html",
+            ".xlsx",
+            ".go",
+            ".py",
+            ".java",
+            ".js",
+            ".rs",
+        ]
+    )
+
+    image_map = set([".png", ".jpeg"])
+
+    for file in upload_file:
+        ext = Path(file.name).suffix.lower()
+        logging.info(ext)
+        if ext in file_map:
+            files.append(file)
+        elif ext in image_map:
+            images.append(file)
+        else:
+            st.toast(f"Failed to upload file -> {file.name} type not supported")
+
+    return images, files
+
+
 def chat():
     if (
         prompt := st.chat_input("", key="chat", accept_file="multiple")
@@ -551,6 +595,7 @@ def chat():
             if not st.session_state.ghost_session:
                 with st.spinner():
                     try:
+                        images, files = filter_files(prompt.files)
                         add_msg_response = requests.put(
                             url="http://localhost:8000/session/msg/"
                             + st.session_state.session_id
@@ -562,9 +607,16 @@ def chat():
                                 "timestamp": datetime.now().isoformat(),
                                 "files": [
                                     (base64.b64encode(file.read()).decode(), file.name)
-                                    for file in prompt.files
+                                    for file in files
                                 ],
-                                "images": [("", "")],
+                                "images": [
+                                    (
+                                        base64.b64encode(image.read()).decode(),
+                                        image.type,
+                                        image.name,
+                                    )
+                                    for image in images
+                                ],
                             },
                         )
 
@@ -591,6 +643,7 @@ def chat():
         with st.chat_message("assistant"):
             with st.spinner("Thinking..."):
                 try:
+                    images, files = filter_files(prompt.files)
                     response = requests.post(
                         url="http://localhost:8000/agent/chat",
                         json={
@@ -601,12 +654,19 @@ def chat():
                                 "role": "user",
                                 "content": prompt.text,
                                 "timestamp": datetime.now().isoformat(),
-                                "images": [("", "")],
-                                "files": [
-                                    (base64.b64encode(file.read()).decode(), file.name)
-                                    for file in prompt.files
-                                ],
                             },
+                            "files": [
+                                (base64.b64encode(file.read()).decode(), file.name)
+                                for file in files
+                            ],
+                            "images": [
+                                (
+                                    base64.b64encode(image.read()).decode(),
+                                    image.type,
+                                    image.name,
+                                )
+                                for image in images
+                            ],
                             "ghost_session": st.session_state.ghost_session,
                         },
                     )
@@ -629,8 +689,8 @@ def chat():
                                 "role": "assistant",
                                 "content": response.json()["msg"],
                                 "timestamp": datetime.now().isoformat(),
-                                "images": [("", "")],
-                                "files": [("", "")],
+                                "images": [],
+                                "files": [],
                             },
                         )
 

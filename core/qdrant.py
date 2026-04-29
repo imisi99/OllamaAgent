@@ -9,9 +9,7 @@ from qdrant_client.models import (
     FieldCondition,
     Filter,
     MatchValue,
-    Payload,
     PointStruct,
-    UpdateOperation,
 )
 from qdrant_client.http.models import UpdateStatus
 from .emb import EmbeddingModel
@@ -294,6 +292,7 @@ class Qdrant:
     async def worker(self):
         MAX_ATTEMPTS = 3
         while True:
+            task = None
             try:
                 task = await self.jobs.get()
                 for attempts in range(task.retries):
@@ -329,9 +328,11 @@ class Qdrant:
                             logging.error(
                                 f"[qdrant worker] all retries exhausted for job -> {task.job.value} session -> {task.uid}, err -> {e}"
                             )
-
+            except asyncio.CancelledError:
+                break
             finally:
-                self.jobs.task_done()
+                if task is not None:
+                    self.jobs.task_done()
 
     async def finish_queue(self):
         await self.jobs.join()
