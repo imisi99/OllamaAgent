@@ -3,9 +3,15 @@ import logging
 import os
 import tempfile
 from datetime import datetime
-from typing import Optional
+from typing import Optional, cast
 from langchain_core.documents import Document
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import (
+    AIMessage,
+    HumanMessage,
+    SystemMessage,
+    ToolMessage,
+    AIMessageChunk,
+)
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.tools import BaseTool
 from langchain_community.document_loaders import (
@@ -60,6 +66,7 @@ class Model:
             system_prompt=prompt,
             state_schema=SessAgentState,
         )
+
         return agent
 
     def build_graph(self, agent):
@@ -105,7 +112,7 @@ class Model:
                 )
             return state
 
-        def run_agent(state: SessionState) -> SessionState:
+        async def run_agent(state: SessionState) -> SessionState:
             session_id = state["session_id"]
             chat_history = get_redis_database().get_short_term_memory(session_id)
 
@@ -147,7 +154,7 @@ class Model:
                 messages[-1].content = prompt
 
             # TODO: Use a check for the token emitting for streaming messages with a check on the final output if it isn't then redisplay
-            response = agent.invoke(
+            response = await agent.ainvoke(
                 {
                     "session_id": session_id,
                     "user_id": state["user_id"],
@@ -190,6 +197,14 @@ class Model:
 
     def chat(self, prompt: SessionState):
         return self.graph.ainvoke(prompt)
+
+    async def stream_chat(self, prompt: SessionState):
+        """Yields token strings as they are generated."""
+        async for event in self.graph.astream_events(prompt, version="v2"):
+            if event["event"] == "on_chat_model_stream":
+                chunk = cast(AIMessageChunk, event["data"].get("chunk"))
+                if chunk.content:
+                    yield chunk.content
 
     def load_document(self, files: list[tuple[bytes, str]]) -> list[Document]:
         loaders = {
@@ -266,13 +281,13 @@ class Model:
                     if reason:
                         thoughts.append(reason)
 
-            logging.info(f"[{label}] THINKING: \n {'\n'.join(reversed(thoughts))}")
-            logging.info(tools_to_call)
+            logging.info(f"[{label}] THINKING: \n{'\n'.join(reversed(thoughts))}")
+
             logging.info(
-                f"[{label}] TOOLS TO CALL: \n {'\n'.join(f'{name}: \n {"\n".join(f"{param}: \n {arg}" for param, arg in args)}' for name, args in tools_to_call)}"
+                f"[{label}] TOOLS CALLED: \n{'\n'.join(f'{tool[0]}: \n{"\n".join(f"{param} -> {arg}" for param, arg in tool[1].items())}' for tool in tools_to_call)}"
             )
             logging.info(
-                f"[{label}] TOOLS RESPONSE: \n {'\n'.join(f'{name}: \n {resp}' for name, resp in tools)}"
+                f"[{label}] TOOLS RESPONSE: \n{'\n'.join(f'{name} -> {resp}' for name, resp in tools)}"
             )
 
         if isinstance(content, str):

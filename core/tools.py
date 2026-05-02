@@ -1,8 +1,13 @@
+from datetime import datetime
 import json
 import logging
+import zoneinfo
 import httpx
 from typing import Annotated, Any
 from langchain.tools import InjectedState, tool
+from zoneinfo import ZoneInfo
+import requests
+
 
 from core.agent import get_model
 from db.mongo import get_mongo_database
@@ -11,12 +16,64 @@ from schemas.agent import SessAgentState
 from schemas.mongo import Session
 
 # TODO:
-# The web search error should be clear about user being offline
+# The web search works for only the bing engine the duckduckgo (timeout), google (request denied) (What's the score for and should it be added ?)
+# The web search could also work by adding a search url for more content ?
+
 # DONE:
 # Also allow for the model to choose to summarize the chat ?
+# The web search error should be clear about user being offline
 
 
-@tool()
+@tool
+def get_current_time(timezone: str = "UTC") -> str:
+    """
+    Get the current date and time. Optionally pass a timezone (e.g. 'Africa/Lagos').
+    """
+    try:
+        now = datetime.now(ZoneInfo(timezone))
+        return now.strftime("%A, %B %d %Y %I:%M %p %Z")
+    except zoneinfo.ZoneInfoNotFoundError:
+        return f"Unknown timezone '{timezone}'. Defaulting to UTC: {datetime.now(ZoneInfo('UTC')).strftime('%Y-%m-%d %H:%M:%S UTC')}"
+
+
+@tool
+def get_user_location() -> str:
+    """
+    Get the user approximate location based on their IP address.
+    """
+    try:
+        response = requests.get("http://ip-api.com/json/", timeout=5)
+        data = response.json()
+        if data.get("status") == "success":
+            return (
+                f"City: {data.get('city')}, "
+                f"Region: {data.get('regionName')}, "
+                f"Country: {data.get('country')}, "
+                f"Timezone: {data.get('timezone')}"
+            )
+        return "Could not determine location."
+    except Exception as e:
+        return f"Location lookup failed: {e}"
+
+
+@tool
+def get_time_and_location() -> str:
+    """
+    Get the user approximate location and local time based on the location
+    """
+    location_info = get_user_location.invoke({})
+
+    timezone = "UTC"
+    for part in location_info.split(", "):
+        if part.startswith("Timezone:"):
+            timezone = part.replace("Timezone: ", "").strip()
+            break
+
+    time_info = get_current_time.invoke({"timezone": timezone})
+    return f"Location -> {location_info} \n Local Time -> {time_info}"
+
+
+@tool
 def get_user_info(state: Annotated[SessAgentState, InjectedState]) -> str:
     """
     Retrieves details about the user from the db that you might have written in the past.
@@ -84,8 +141,12 @@ def web_search(query: str, max_results: int = 5) -> list[dict] | str:
         )
         return "The user is offline and web search is currently unavailable"
 
-    logging.info(resp.json())
     results = resp.json().get("results", [])
+
+    if len(results) == 0:
+        unresponsive = resp.json().get("unresponsive_engines", [])
+        if len(unresponsive) >= 1:
+            return f"The web engines didn't respond likely due to being offline don't try anytime soon: {','.join(f'ENGINE: {engine[0]}, RESP: {engine[1]}' for engine in unresponsive)}"
 
     if len(results) == 0:
         return "The web search didn't return any result"
@@ -160,6 +221,9 @@ async def find_related_sessions(
 
 tools = [
     get_user_info,
+    get_user_location,
+    get_current_time,
+    get_time_and_location,
     save_insight_about_user,
     web_search,
     find_related_sessions,

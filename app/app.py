@@ -3,7 +3,7 @@ import logging
 from pathlib import Path
 import time
 from typing import cast
-from langchain_community.document_loaders import image
+import httpx
 import requests
 import streamlit as st
 
@@ -19,7 +19,8 @@ from streamlit.runtime.uploaded_file_manager import UploadedFile
 # Adding the metrics (reasoning content, tool calls in the view also ? )
 # Fix the loading of file back for streamlit and also the images let it be empty if not in use
 # The title stuff not sure it changes properly
-#
+# Remove thinking when streaming responses
+
 
 # DONE:
 # Also add the session action to first be untitled.
@@ -35,6 +36,9 @@ from streamlit.runtime.uploaded_file_manager import UploadedFile
 # Rewrite the pop up to use dialog for the collection of inputs (Can change the memory view)
 # Rewrite the create user using dialog
 # The name in the extend stuff doesn't show it after first instance
+
+
+API_URL = "http://localhost:8000"
 
 
 def header():
@@ -422,6 +426,7 @@ def get_or_create_user():
                 st.error(
                     "Failed to fetch user \n couldn't communicate with the server."
                 )
+                st.stop()
 
 
 def session_sidebar():
@@ -644,40 +649,82 @@ def chat():
             with st.spinner("Thinking..."):
                 try:
                     images, files = filter_files(prompt.files)
-                    response = requests.post(
-                        url="http://localhost:8000/agent/chat",
-                        json={
-                            "session_id": st.session_state.session_id,
-                            "session_uid": st.session_state.session_uid,
-                            "user_id": st.session_state.user_id,
-                            "message": {
-                                "role": "user",
-                                "content": prompt.text,
-                                "timestamp": datetime.now().isoformat(),
-                            },
-                            "files": [
-                                (base64.b64encode(file.read()).decode(), file.name)
-                                for file in files
-                            ],
-                            "images": [
-                                (
-                                    base64.b64encode(image.read()).decode(),
-                                    image.type,
-                                    image.name,
-                                )
-                                for image in images
-                            ],
-                            "ghost_session": st.session_state.ghost_session,
-                        },
-                    )
 
-                    if response.status_code != 200:
-                        st.toast(
-                            f"Failed to communicate with agent -> {
-                                response.json()['detail']
-                            }"
-                        )
-                        st.stop()
+                    def stream_response():
+                        with httpx.stream(
+                            "POST",
+                            f"{API_URL}/agent/chat/stream",
+                            json={
+                                "session_id": st.session_state.session_id,
+                                "session_uid": st.session_state.session_uid,
+                                "user_id": st.session_state.user_id,
+                                "message": {
+                                    "role": "user",
+                                    "content": prompt.text,
+                                    "timestamp": datetime.now().isoformat(),
+                                    "files": [
+                                        (
+                                            base64.b64encode(file.read()).decode(),
+                                            file.name,
+                                        )
+                                        for file in files
+                                    ],
+                                    "images": [
+                                        (
+                                            base64.b64encode(image.read()).decode(),
+                                            image.type,
+                                            image.name,
+                                        )
+                                        for image in images
+                                    ],
+                                },
+                                "ghost_session": st.session_state.ghost_session,
+                            },
+                            timeout=120,
+                        ) as r:
+                            for line in r.iter_text():
+                                if line.startswith("data: "):
+                                    token = line[6:]
+                                    if token != "[DONE STREAMING]":
+                                        yield token
+
+                    # response = requests.post(
+                    #     url="http://localhost:8000/agent/chat",
+                    #     json={
+                    #         "session_id": st.session_state.session_id,
+                    #         "session_uid": st.session_state.session_uid,
+                    #         "user_id": st.session_state.user_id,
+                    #         "message": {
+                    #             "role": "user",
+                    #             "content": prompt.text,
+                    #             "timestamp": datetime.now().isoformat(),
+                    #             "files": [
+                    #                 (base64.b64encode(file.read()).decode(), file.name)
+                    #                 for file in files
+                    #             ],
+                    #             "images": [
+                    #                 (
+                    #                     base64.b64encode(image.read()).decode(),
+                    #                     image.type,
+                    #                     image.name,
+                    #                 )
+                    #                 for image in images
+                    #             ],
+                    #         },
+                    #         "ghost_session": st.session_state.ghost_session,
+                    #     },
+                    # )
+                    #
+                    # if response.status_code != 200:
+                    #     st.toast(
+                    #         f"Failed to communicate with agent -> {
+                    #             response.json()['detail']
+                    #         }"
+                    #     )
+                    #     st.stop()
+                    #
+
+                    full_response = st.write_stream(stream_response())
 
                     if not st.session_state.ghost_session:
                         add_msg_response = requests.put(
@@ -687,7 +734,7 @@ def chat():
                             + st.session_state.session_uid,
                             json={
                                 "role": "assistant",
-                                "content": response.json()["msg"],
+                                "content": full_response,
                                 "timestamp": datetime.now().isoformat(),
                                 "images": [],
                                 "files": [],
@@ -702,9 +749,9 @@ def chat():
                             )
                             st.stop()
 
-                    st.markdown(response.json()["msg"])
+                    # st.markdown(response.json()["msg"])
                     st.session_state.messages.append(
-                        {"role": "assistant", "content": response.json()["msg"]}
+                        {"role": "assistant", "content": full_response}
                     )
 
                 except Exception as e:
