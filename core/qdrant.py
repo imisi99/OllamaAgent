@@ -76,8 +76,8 @@ class Qdrant:
     async def get_related_points(
         self,
         id: str,
-        query: str,
-        score_threshold: float,
+        query: str = "",
+        score_threshold: float = 0.5,
         use_query: bool = False,
         limit: int = 5,
     ) -> tuple[list[tuple[Session, float]], float] | None:
@@ -120,6 +120,9 @@ class Qdrant:
                 must_not=[FieldCondition(key="uuid", match=MatchValue(value=id))]
             ),
         )
+
+        if len(result.points) == 0:
+            return None
 
         response: list[tuple[Session, float]] = []
         avgScore = 0

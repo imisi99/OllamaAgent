@@ -20,6 +20,7 @@ from streamlit.runtime.uploaded_file_manager import UploadedFile
 # Fix the loading of file back for streamlit and also the images let it be empty if not in use
 # The title stuff not sure it changes properly
 # Remove thinking when streaming responses
+# Work on the Similar chats
 
 
 # DONE:
@@ -275,7 +276,7 @@ def display_session_actions():
             name = "Untitled"
         else:
             name = st.session_state.session_name
-        with st.expander(label=name, width=230):
+        with st.expander(label=name, width=350):
 
             @st.dialog("Rename Session")
             def rename_sess():
@@ -356,13 +357,85 @@ def display_session_actions():
                                 "Failed to delete session \n couldn't communicate with the server."
                             )
 
-            col1, col2 = st.columns(2)
+            @st.dialog("Find Similar Sessions")
+            def find_similar_sess():
+                threshold = st.number_input(
+                    "Enter threshold", min_value=0.0, max_value=1.0, value=0.5
+                )
+                limit = st.number_input(
+                    "Enter limit", min_value=1, max_value=100, value=5
+                )
+                if st.button("Find Sessions"):
+                    with st.spinner("Finding sessions..."):
+                        try:
+                            similar_req = requests.get(
+                                url=f"{API_URL}/session/find/similar",
+                                json={
+                                    "uid": st.session_state.session_uid,
+                                    "threshold": threshold,
+                                    "limit": limit,
+                                },
+                            )
+
+                            if similar_req.status_code == 200:
+                                sessions, avgScore = (
+                                    similar_req.json()["sessions"],
+                                    similar_req.json()["score"],
+                                )
+
+                                st.write(
+                                    f" Retrieved {len(sessions)} sessions with an average score of -> {avgScore}"
+                                )
+
+                                similar_col1, similar_col2 = st.columns([0.8, 0.2])
+                                for sess in sessions:
+                                    with similar_col1:
+                                        with st.popover(sess[0]["name"]):
+                                            try:
+                                                message_req = requests.get(
+                                                    url=f"{API_URL}/session/"
+                                                    + sess[0]["_id"],
+                                                )
+                                                st.session_state.session_id = sess[0][
+                                                    "_id"
+                                                ]
+                                                st.session_state.session_uid = sess[0][
+                                                    "uuid"
+                                                ]
+                                                st.session_state.ghost_session = False
+                                                st.session_state.show_header = False
+                                                st.session_state.messages = (
+                                                    message_req.json()["session"][
+                                                        "messages"
+                                                    ]
+                                                )
+                                                st.rerun()
+                                            except Exception as e:
+                                                pass
+
+                                    with similar_col2:
+                                        st.write(sess[1])
+
+                            elif similar_req.status_code in (404, 500):
+                                st.info(similar_req.json()["msg"])
+                        except Exception as e:
+                            logging.error(
+                                f"Failed to complete request to the server -> {e}"
+                            )
+                            st.error(
+                                "Failed to find similar sessions, couldn't communicate with the server."
+                            )
+
+            col1, col2, col3 = st.columns([0.34, 0.3, 0.37])
             with col1:
                 if st.button("Rename"):
                     rename_sess()
             with col2:
                 if st.button("Delete"):
                     delete_sess()
+            with col3:
+                if st.button("Similar"):
+                    find_similar_sess()
 
 
 def get_or_create_user():
@@ -557,16 +630,12 @@ def chat():
     ):
         prompt = cast(ChatInputValue, prompt)
 
-        if st.session_state.show_header and (
-            st.session_state.session_id == "" or st.session_state.ghost_session
-        ):
-            st.session_state.show_header = False
-            st.session_state.stored_prompt = prompt
-            st.rerun()
-
         if st.session_state.stored_prompt is not None:
             prompt = st.session_state.stored_prompt
             st.session_state.stored_prompt = None
+
+        if st.session_state.ghost_session:
+            st.session_state.show_header = False
 
         if st.session_state.session_id == "" and not st.session_state.ghost_session:
             with st.spinner():
@@ -588,6 +657,9 @@ def chat():
                     st.session_state.session_uid = new_session.json()["uid"]
                     st.session_state.session_name = new_session.json()["title"]
                     st.session_state.update_view = True
+                    st.session_state.stored_prompt = prompt
+                    st.session_state.show_header = False
+                    st.rerun()
 
                 except Exception as e:
                     logging.error(f"Failed to complete request to the server -> {e}")
@@ -596,11 +668,14 @@ def chat():
                     )
                     st.stop()
 
+        st.session_state.chat_images, st.session_state.chat_files = filter_files(
+            prompt.files
+        )
+
         with st.chat_message("user"):
             if not st.session_state.ghost_session:
                 with st.spinner():
                     try:
-                        images, files = filter_files(prompt.files)
                         add_msg_response = requests.put(
                             url="http://localhost:8000/session/msg/"
                             + st.session_state.session_id
@@ -612,7 +687,7 @@ def chat():
                                 "timestamp": datetime.now().isoformat(),
                                 "files": [
                                     (base64.b64encode(file.read()).decode(), file.name)
-                                    for file in files
+                                    for file in st.session_state.chat_files
                                 ],
                                 "images": [
                                     (
@@ -620,7 +695,7 @@ def chat():
                                         image.type,
                                         image.name,
                                     )
-                                    for image in images
+                                    for image in st.session_state.chat_images
                                 ],
                             },
                         )
@@ -648,7 +723,6 @@ def chat():
         with st.chat_message("assistant"):
             with st.spinner("Thinking..."):
                 try:
-                    images, files = filter_files(prompt.files)
 
                     def stream_response():
                         with httpx.stream(
@@ -667,7 +741,7 @@ def chat():
                                             base64.b64encode(file.read()).decode(),
                                             file.name,
                                         )
-                                        for file in files
+                                        for file in st.session_state.chat_files
                                     ],
                                     "images": [
                                         (
@@ -675,54 +749,15 @@ def chat():
                                             image.type,
                                             image.name,
                                         )
-                                        for image in images
+                                        for image in st.session_state.chat_images
                                     ],
                                 },
                                 "ghost_session": st.session_state.ghost_session,
                             },
                             timeout=120,
                         ) as r:
-                            for line in r.iter_text():
-                                if line.startswith("data: "):
-                                    token = line[6:]
-                                    if token != "[DONE STREAMING]":
-                                        yield token
-
-                    # response = requests.post(
-                    #     url="http://localhost:8000/agent/chat",
-                    #     json={
-                    #         "session_id": st.session_state.session_id,
-                    #         "session_uid": st.session_state.session_uid,
-                    #         "user_id": st.session_state.user_id,
-                    #         "message": {
-                    #             "role": "user",
-                    #             "content": prompt.text,
-                    #             "timestamp": datetime.now().isoformat(),
-                    #             "files": [
-                    #                 (base64.b64encode(file.read()).decode(), file.name)
-                    #                 for file in files
-                    #             ],
-                    #             "images": [
-                    #                 (
-                    #                     base64.b64encode(image.read()).decode(),
-                    #                     image.type,
-                    #                     image.name,
-                    #                 )
-                    #                 for image in images
-                    #             ],
-                    #         },
-                    #         "ghost_session": st.session_state.ghost_session,
-                    #     },
-                    # )
-                    #
-                    # if response.status_code != 200:
-                    #     st.toast(
-                    #         f"Failed to communicate with agent -> {
-                    #             response.json()['detail']
-                    #         }"
-                    #     )
-                    #     st.stop()
-                    #
+                            for token in r.iter_text():
+                                yield token
 
                     full_response = st.write_stream(stream_response())
 
@@ -749,7 +784,6 @@ def chat():
                             )
                             st.stop()
 
-                    # st.markdown(response.json()["msg"])
                     st.session_state.messages.append(
                         {"role": "assistant", "content": full_response}
                     )

@@ -1,4 +1,3 @@
-import logging
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse, StreamingResponse
 
@@ -44,9 +43,7 @@ async def stream_chat(input: SessionConversation, model: Model = Depends(get_mod
 
     async def token_generator():
         async for token in model.stream_chat(session):
-            logging.info(token)
-            yield f"data: {token}"
-        yield "data: [DONE STREAMING]"
+            yield f"{token}"
 
     return StreamingResponse(
         token_generator(),

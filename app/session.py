@@ -1,6 +1,8 @@
 import base64
 import logging
 from datetime import datetime
+from os import stat
+from sys import flags
 from uuid import uuid4
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
@@ -12,7 +14,7 @@ from core.qdrant import Job, Qdrant, Task
 from db.mongo import get_mongo_database
 from db.qdrant import get_qdrant_database
 from schemas.mongo import Message, Session
-from schemas.session import CreateSession
+from schemas.session import CreateSession, SimilarSessions
 
 session = APIRouter()
 
@@ -183,6 +185,55 @@ def fetch_single_session(session_id: str, db: Database = Depends(get_mongo_datab
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={"msg": f"Failed to fetch session -> {e}."},
+        )
+
+
+@session.get("/session/find/similar")
+async def fetch_similar_sessions(
+    details: SimilarSessions, qdb: Qdrant = Depends(get_qdrant_database)
+):
+    try:
+        result = await qdb.get_related_points(
+            details.uid,
+            score_threshold=details.threshold,
+            limit=details.limit,
+        )
+
+        if result is None:
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content={
+                    "msg": "No similar sessions available, maybe reduce threshold."
+                },
+            )
+
+        points, avgScore = result
+
+        points_score: list[tuple[Session, float]] = [
+            (
+                Session(
+                    {
+                        "name": sess["name"],
+                        "_id": sess["_id"],
+                        "created_at": sess["created_at"],
+                        "messages": [],
+                        "uuid": sess["uuid"],
+                    }
+                ),
+                score,
+            )
+            for sess, score in points
+        ]
+
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={"score": avgScore, "sessions": points_score},
+        )
+    except Exception as e:
+        logging.error(f"Failed to fetch similar sessions -> {e}")
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"msg": f"Failed to fetch similar sessions -> {e}."},
         )
 
 

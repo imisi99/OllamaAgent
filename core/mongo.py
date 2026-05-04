@@ -3,6 +3,9 @@ from bson import ObjectId
 from pymongo import MongoClient
 from schemas.mongo import Message, Session, User
 
+# TODO:
+# Change the timestamp and created at to datetime object and then make it a union for sorting
+
 
 class Database:
     def __init__(

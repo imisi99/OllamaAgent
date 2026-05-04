@@ -34,11 +34,12 @@ from schemas.agent import SessAgentState, SessionState
 from schemas.mongo import Message
 
 # TODO:
+# Add tools for the streaming also
 # The prompt length is a factor causing slow response from the agent (reduce it)
-# Work on the streaming of the response
 # In the logging llm response add a tools used and result and also is the time for the message the same across all the thoughts and tool calls
 
 # DONE:
+# Work on the streaming of the response
 # The agent logging for the reasoning doesn't work with tool calls cause reasoning is done then
 # Work on adding the files also for the agent
 # Add a tool logging procedure also
@@ -201,10 +202,15 @@ class Model:
     async def stream_chat(self, prompt: SessionState):
         """Yields token strings as they are generated."""
         async for event in self.graph.astream_events(prompt, version="v2"):
-            if event["event"] == "on_chat_model_stream":
-                chunk = cast(AIMessageChunk, event["data"].get("chunk"))
-                if chunk.content:
-                    yield chunk.content
+            match event["event"]:
+                case "on_chat_model_stream":
+                    chunk = cast(AIMessageChunk, event["data"].get("chunk"))
+                    if chunk.content:
+                        yield chunk.content
+                case "on_tool_call_start":
+                    pass
+                case "on_tool_call_end":
+                    pass
 
     def load_document(self, files: list[tuple[bytes, str]]) -> list[Document]:
         loaders = {
