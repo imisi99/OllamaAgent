@@ -6,8 +6,6 @@ from schemas.agent import SessionConversation, SessionState
 
 serve = APIRouter()
 
-# TODO: User gRPC for this instead ? (what are the gains)
-
 
 @serve.post("/agent/chat")
 async def chat_agent(input: SessionConversation, model: Model = Depends(get_model)):

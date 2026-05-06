@@ -7,7 +7,6 @@ import httpx
 import requests
 import streamlit as st
 
-from datetime import datetime
 
 from streamlit.elements.widgets.chat import ChatInputValue
 from streamlit.runtime.uploaded_file_manager import UploadedFile
@@ -20,7 +19,6 @@ from streamlit.runtime.uploaded_file_manager import UploadedFile
 # Fix the loading of file back for streamlit and also the images let it be empty if not in use
 # The title stuff not sure it changes properly
 # Remove thinking when streaming responses
-# Work on the Similar chats
 
 
 # DONE:
@@ -37,6 +35,7 @@ from streamlit.runtime.uploaded_file_manager import UploadedFile
 # Rewrite the pop up to use dialog for the collection of inputs (Can change the memory view)
 # Rewrite the create user using dialog
 # The name in the extend stuff doesn't show it after first instance
+# Work on the Similar chats
 
 
 API_URL = "http://localhost:8000"
@@ -45,7 +44,7 @@ API_URL = "http://localhost:8000"
 def header():
     if st.session_state.show_header:
         with st.header(""):
-            col1, col2 = st.columns([3, 1.0])
+            col1, col2 = st.columns([9.0, 1.0])
             with col1:
                 st.header(
                     ":red[Ollama] :grey[_Agent_]", divider="grey", width="content"
@@ -55,18 +54,27 @@ def header():
                     "session_id" not in st.session_state
                     or st.session_state.session_id == ""
                 ):
-                    if st.toggle(
-                        label="Ghost",
-                        help="This creates a temporary chat that is not stored.",
-                    ):
-                        st.session_state.ghost_session = True
+                    if not st.session_state.ghost_session:
+                        if st.button(
+                            "Ghost",
+                            help="This creates a temporary chat that doesn't persist",
+                            type="tertiary",
+                        ):
+                            st.session_state.ghost_session = True
+                            st.rerun()
                     else:
-                        st.session_state.ghost_session = False
+                        if st.button(
+                            "Norm",
+                            help="This creates a normal chat that will persist",
+                            type="tertiary",
+                        ):
+                            st.session_state.ghost_session = False
+                            st.rerun()
 
 
 def user_profile():
     with st.sidebar:
-        with st.expander("⚙️ " + st.session_state.user_name, width=300):
+        with st.expander(st.session_state.user_name, width=300):
 
             @st.dialog("Change your username")
             def rename_user():
@@ -365,7 +373,8 @@ def display_session_actions():
                 limit = st.number_input(
                     "Enter limit", min_value=1, max_value=100, value=5
                 )
-                if st.button("Find Sessions"):
+                if st.button("Find Sessions") or st.session_state.get("find_session"):
+                    st.session_state.find_session = True
                     with st.spinner("Finding sessions..."):
                         try:
                             similar_req = requests.get(
@@ -390,26 +399,42 @@ def display_session_actions():
                                 similar_col1, similar_col2 = st.columns([0.8, 0.2])
                                 for sess in sessions:
                                     with similar_col1:
-                                        with st.popover(sess[0]["name"]):
+                                        load_sess_id = sess[0]["_id"]
+                                        load_sess_uid = sess[0]["uuid"]
+                                        if st.button(sess[0]["name"]):
                                             try:
                                                 message_req = requests.get(
                                                     url=f"{API_URL}/session/"
-                                                    + sess[0]["_id"],
+                                                    + load_sess_id,
                                                 )
-                                                st.session_state.session_id = sess[0][
-                                                    "_id"
-                                                ]
-                                                st.session_state.session_uid = sess[0][
-                                                    "uuid"
-                                                ]
-                                                st.session_state.ghost_session = False
-                                                st.session_state.show_header = False
-                                                st.session_state.messages = (
-                                                    message_req.json()["session"][
-                                                        "messages"
-                                                    ]
-                                                )
-                                                st.rerun()
+
+                                                resp = message_req.json()
+
+                                                if message_req.status_code == 200:
+                                                    st.session_state.session_id = (
+                                                        load_sess_id
+                                                    )
+                                                    st.session_state.session_uid = (
+                                                        load_sess_uid
+                                                    )
+                                                    st.session_state.ghost_session = (
+                                                        False
+                                                    )
+                                                    st.session_state.show_header = False
+                                                    st.session_state.messages = resp[
+                                                        "session"
+                                                    ]["messages"]
+                                                    st.session_state.find_session = (
+                                                        False
+                                                    )
+                                                    st.rerun()
+                                                else:
+                                                    st.toast(
+                                                        resp["msg"]
+                                                        if "msg" in resp
+                                                        else resp["detail"],
+                                                        duration=7,
+                                                    )
                                             except Exception as e:
                                                 pass
 
@@ -523,8 +548,9 @@ def session_sidebar():
                     sessions_req = requests.get(
                         url="http://localhost:8000/session/all/preview"
                     )
+
                     if sessions_req.status_code == 404:
-                        st.info("you have no existing session \n start a new session")
+                        st.info("you have no existing session start a new session")
 
                     elif sessions_req.status_code == 200:
                         st.session_state.sessions = sessions_req.json()["sessions"]
@@ -539,7 +565,7 @@ def session_sidebar():
                 except Exception as e:
                     logging.error(f"Failed to complete request to the server -> {e}")
                     st.error(
-                        "Failed to fetch sessions \n couldn't communicate with the server."
+                        "Failed to fetch sessions couldn't communicate with the server."
                     )
 
             st.session_state.sessions_fetched = True
@@ -634,11 +660,8 @@ def chat():
             prompt = st.session_state.stored_prompt
             st.session_state.stored_prompt = None
 
-        if st.session_state.ghost_session:
-            st.session_state.show_header = False
-
         if st.session_state.session_id == "" and not st.session_state.ghost_session:
-            with st.spinner():
+            with st.spinner(""):
                 try:
                     new_session = requests.post(
                         url="http://localhost:8000/session/create",
@@ -674,7 +697,7 @@ def chat():
 
         with st.chat_message("user"):
             if not st.session_state.ghost_session:
-                with st.spinner():
+                with st.spinner(""):
                     try:
                         add_msg_response = requests.put(
                             url="http://localhost:8000/session/msg/"
@@ -684,7 +707,7 @@ def chat():
                             json={
                                 "role": "user",
                                 "content": prompt.text,
-                                "timestamp": datetime.now().isoformat(),
+                                "timestamp": "",
                                 "files": [
                                     (base64.b64encode(file.read()).decode(), file.name)
                                     for file in st.session_state.chat_files
@@ -735,7 +758,7 @@ def chat():
                                 "message": {
                                     "role": "user",
                                     "content": prompt.text,
-                                    "timestamp": datetime.now().isoformat(),
+                                    "timestamp": "",
                                     "files": [
                                         (
                                             base64.b64encode(file.read()).decode(),
@@ -770,7 +793,7 @@ def chat():
                             json={
                                 "role": "assistant",
                                 "content": full_response,
-                                "timestamp": datetime.now().isoformat(),
+                                "timestamp": None,
                                 "images": [],
                                 "files": [],
                             },
@@ -820,7 +843,6 @@ if "ghost_session" not in st.session_state:
 
 if "stored_prompt" not in st.session_state:
     st.session_state.stored_prompt = None
-
 
 if "session_id" not in st.session_state:
     st.session_state.session_id = ""

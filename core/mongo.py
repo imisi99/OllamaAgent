@@ -1,3 +1,5 @@
+from datetime import datetime
+import logging
 from typing import Any
 from bson import ObjectId
 from pymongo import MongoClient
@@ -18,7 +20,18 @@ class Database:
         self.session_collection = self.client[self.db][self.session]
         self.user_collection = self.client[self.db][self.user]
 
+    def normalize_timestamp(self, timestamp: datetime | str) -> datetime:
+        if isinstance(timestamp, str):
+            return datetime.fromisoformat(timestamp)
+        return timestamp
+
+    def denormalize_timestamp(self, timestamp: datetime | str) -> str:
+        if isinstance(timestamp, datetime):
+            return timestamp.isoformat()
+        return timestamp
+
     def create_session(self, session: Session) -> tuple[bool, str]:
+        session["created_at"] = self.normalize_timestamp(session["created_at"])
         result = self.session_collection.insert_one(
             {
                 "uuid": session["uuid"],
@@ -41,7 +54,7 @@ class Database:
                     {
                         "content": msg["content"],
                         "role": msg["role"],
-                        "timestamp": msg["timestamp"],
+                        "timestamp": self.denormalize_timestamp(msg["timestamp"]),
                         "images": msg["images"],
                         "files": msg["files"],
                     }
@@ -52,7 +65,7 @@ class Database:
                 "uuid": result["uuid"],
                 "name": result["name"],
                 "messages": message,
-                "created_at": result["created_at"],
+                "created_at": self.denormalize_timestamp(result["created_at"]),
             }
 
             return session
@@ -76,7 +89,7 @@ class Database:
                         "role": msg["role"],
                         "images": msg["images"],
                         "files": msg["files"],
-                        "timestamp": msg["timestamp"],
+                        "timestamp": self.denormalize_timestamp(msg["timestamp"]),
                     }
                 )
 
@@ -85,20 +98,18 @@ class Database:
                     "_id": str(session["_id"]),
                     "uuid": session["uuid"],
                     "name": session["name"],
-                    "created_at": session["created_at"],
+                    "created_at": self.denormalize_timestamp(session["created_at"]),
                     "messages": message,
                 }
             )
 
         return result
 
-    # Fetch in order of last message datetime
+    # TODO: Fetch in order of last message datetime
     def fetch_all_session_preview(self) -> list[Session]:
         sessions = []
 
-        with self.session_collection.find(
-            filter={}, projection={"messages": False, "created_at": False}
-        ) as cursor:
+        with self.session_collection.find(filter={}, projection={}) as cursor:
             for doc in cursor:
                 sessions.append(doc)
 
@@ -110,7 +121,7 @@ class Database:
                     "_id": str(session["_id"]),
                     "uuid": session["uuid"],
                     "name": session["name"],
-                    "created_at": "",
+                    "created_at": self.denormalize_timestamp(session["created_at"]),
                     "messages": message,
                 }
             )
@@ -133,7 +144,7 @@ class Database:
                         {
                             "content": msg["content"],
                             "role": msg["role"],
-                            "timestamp": msg["timestamp"],
+                            "timestamp": self.denormalize_timestamp(msg["timestamp"]),
                             "images": msg["images"],
                             "files": msg["files"],
                         }
@@ -144,7 +155,7 @@ class Database:
                     "_id": str(session["_id"]),
                     "uuid": session["uuid"],
                     "name": session["name"],
-                    "created_at": session["created_at"],
+                    "created_at": self.denormalize_timestamp(session["created_at"]),
                     "messages": message,
                 }
             )
@@ -169,7 +180,7 @@ class Database:
                         {
                             "content": msg["content"],
                             "role": msg["role"],
-                            "timestamp": msg["timestamp"],
+                            "timestamp": self.denormalize_timestamp(msg["timestamp"]),
                             "images": [],
                             "files": [],
                         }
@@ -181,7 +192,7 @@ class Database:
                     {
                         "_id": str(session["_id"]),
                         "uuid": session["uuid"],
-                        "created_at": session["created_at"],
+                        "created_at": self.denormalize_timestamp(session["created_at"]),
                         "name": session["name"],
                         "messages": message,
                     }
@@ -198,6 +209,7 @@ class Database:
         return result.acknowledged
 
     def add_messages(self, session_id: str, message: Message) -> bool:
+        message["timestamp"] = self.normalize_timestamp(message["timestamp"])
         result = self.session_collection.update_one(
             {"_id": ObjectId(session_id)}, {"$push": {"messages": message}}
         )

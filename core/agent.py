@@ -91,6 +91,7 @@ class Model:
 
             return state
 
+        # TODO: A way to store the images leading up to that point in the summary ?
         def maybe_summarize(state: SessionState) -> SessionState:
             session_id = state["session_id"]
             redDB = get_redis_database()
@@ -154,7 +155,6 @@ class Model:
             if len(state["chunks"]) > 0:
                 messages[-1].content = prompt
 
-            # TODO: Use a check for the token emitting for streaming messages with a check on the final output if it isn't then redisplay
             response = await agent.ainvoke(
                 {
                     "session_id": session_id,
@@ -311,7 +311,7 @@ class Model:
 
     def generate_title(self, content: str) -> str:
         prompt = (
-            "Generate a title for a chat session not more than 5 words using the user first input. Your response should be the title ONLY (one title) without the string quote or any tags an example is \n Explaining Docker Compose \n \n\n\n"
+            "Generate a title for a chat session not more than 5 words using the user first input. Your response should be the title ONLY (one title) without the string quote or any tags an example is (Explaining Docker Compose) "
             + content
         )
         title = "Untitled Session"

@@ -1,6 +1,8 @@
 import asyncio
 import logging
+from datetime import datetime
 from enum import Enum
+import time
 from typing import Union, cast
 from uuid import uuid4
 from langchain_core.documents import Document
@@ -47,7 +49,13 @@ class Qdrant:
         self.embedding = embedding
         self.jobs: asyncio.Queue[Task] = asyncio.Queue()
 
+    def normalize_created_at(self, timestamp: datetime | str) -> str:
+        if isinstance(timestamp, datetime):
+            return timestamp.isoformat()
+        return timestamp
+
     async def create_point(self, session: Session) -> bool:
+        session["created_at"] = self.normalize_created_at(session["created_at"])
         vector = await self.embedding.generate_vector_embedding(session)
         result = self.client.upsert(
             collection_name="chats",
@@ -127,16 +135,12 @@ class Qdrant:
         response: list[tuple[Session, float]] = []
         avgScore = 0
         for point in result.points:
-            payload = cast(Session, point.payload)
-            if payload is not None:
-                session: Session = {
-                    "_id": payload["_id"],
-                    "uuid": payload["uuid"],
-                    "created_at": payload["created_at"],
-                    "name": payload["name"],
-                    "messages": payload["messages"],
-                }
-                response.append((session, point.score))
+            if point.payload:
+                point.payload["created_at"] = datetime.fromisoformat(
+                    point.payload["created_at"]
+                )
+                payload = cast(Session, point.payload)
+                response.append((payload, point.score))
                 avgScore += point.score
 
         avgScore /= len(response) if len(response) > 0 else 1

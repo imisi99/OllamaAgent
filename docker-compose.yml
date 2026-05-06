@@ -145,10 +145,10 @@ services:
           "-c",
           "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')",
         ]
-      interval: 40s
+      interval: 500s
       timeout: 5s
       retries: 4
-      start_period: 15s
+      start_period: 25s
     networks:
       - agent-shared-network
   app:

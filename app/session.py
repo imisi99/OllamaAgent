@@ -1,8 +1,6 @@
 import base64
 import logging
-from datetime import datetime
-from os import stat
-from sys import flags
+import datetime
 from uuid import uuid4
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
@@ -34,7 +32,7 @@ def create_session(
             "_id": "",
             "uuid": uid,
             "messages": [],
-            "created_at": datetime.now().isoformat(),
+            "created_at": datetime.datetime.now(),
             "name": title,
         }
         created, id = db.create_session(sess)
@@ -42,6 +40,7 @@ def create_session(
         if not created:
             raise Exception("MongoDB operation to create session was not acknowledged")
 
+        sess["_id"] = id
         qdb.add_job(Task(job=Job.CREATE_POINT, session=sess))
 
         return JSONResponse(
@@ -94,6 +93,7 @@ def add_message(
     qdb: Qdrant = Depends(get_qdrant_database),
 ):
     try:
+        message["timestamp"] = datetime.datetime.now()
         strFiles = message["files"]
         for i in range(len(strFiles)):
             strFiles[i] = (base64.b64decode(strFiles[i][0]), strFiles[i][1])

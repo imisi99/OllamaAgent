@@ -1,8 +1,11 @@
 import json
+import logging
 from langchain_ollama import OllamaEmbeddings
 from typing import Optional
 
 from schemas.mongo import Session
+
+# TODO: Remove noise from the json like time and id and stuff
 
 
 class EmbeddingModel:
@@ -11,6 +14,7 @@ class EmbeddingModel:
 
     async def generate_vector_embedding(self, session: Session) -> list[float]:
         text = json.dumps(session)
+        logging.info(text)
         vector = await self.EMB_MODEL.aembed_query(text)
         return vector
 

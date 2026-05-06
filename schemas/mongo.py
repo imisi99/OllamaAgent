@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Any, TypedDict
 
 
@@ -12,14 +13,14 @@ class Message(TypedDict):
     content: str
     files: list[tuple[Any, str]]
     images: list[Image]
-    timestamp: str
+    timestamp: datetime | str
 
 
 class Session(TypedDict):
     _id: str
     uuid: str
     name: str
-    created_at: str
+    created_at: datetime | str
     messages: list[Message]
 
 
