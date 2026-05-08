@@ -2,7 +2,6 @@ import asyncio
 import logging
 from datetime import datetime
 from enum import Enum
-import time
 from typing import Union, cast
 from uuid import uuid4
 from langchain_core.documents import Document
@@ -136,9 +135,6 @@ class Qdrant:
         avgScore = 0
         for point in result.points:
             if point.payload:
-                point.payload["created_at"] = datetime.fromisoformat(
-                    point.payload["created_at"]
-                )
                 payload = cast(Session, point.payload)
                 response.append((payload, point.score))
                 avgScore += point.score
@@ -161,6 +157,8 @@ class Qdrant:
                 f"Tried to update point with id -> {id} but payload doesn't exist"
             )
             return False
+
+        message["timestamp"] = self.normalize_created_at(message["timestamp"])
 
         session = cast(Session, payload)
         session["messages"].append(message)

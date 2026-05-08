@@ -1,5 +1,4 @@
 import json
-import logging
 from langchain_ollama import OllamaEmbeddings
 from typing import Optional
 
@@ -14,7 +13,6 @@ class EmbeddingModel:
 
     async def generate_vector_embedding(self, session: Session) -> list[float]:
         text = json.dumps(session)
-        logging.info(text)
         vector = await self.EMB_MODEL.aembed_query(text)
         return vector
 

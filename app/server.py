@@ -1,3 +1,4 @@
+import json
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse, StreamingResponse
 
@@ -5,6 +6,8 @@ from core.agent import Model, get_model
 from schemas.agent import SessionConversation, SessionState
 
 serve = APIRouter()
+
+# TODO: Fix the on_stream_chat with the summarizer.
 
 
 @serve.post("/agent/chat")
@@ -41,7 +44,7 @@ async def stream_chat(input: SessionConversation, model: Model = Depends(get_mod
 
     async def token_generator():
         async for token in model.stream_chat(session):
-            yield f"{token}"
+            yield json.dumps(token)
 
     return StreamingResponse(
         token_generator(),

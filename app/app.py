@@ -1,5 +1,6 @@
 import base64
 import logging
+import json
 from pathlib import Path
 import time
 from typing import cast
@@ -13,6 +14,7 @@ from streamlit.runtime.uploaded_file_manager import UploadedFile
 
 
 # TODO:
+# It doesn't affect other windows the change
 # Moving between chats between conversations Doesn't get the chat stored (should a single API call be chained to use it ?)
 # (Or use a queue sort of to add messages to the stuff ? )
 # Adding the metrics (reasoning content, tool calls in the view also ? )
@@ -44,7 +46,7 @@ API_URL = "http://localhost:8000"
 def header():
     if st.session_state.show_header:
         with st.header(""):
-            col1, col2 = st.columns([9.0, 1.0])
+            col1, col2 = st.columns([0.7, 0.1])
             with col1:
                 st.header(
                     ":red[Ollama] :grey[_Agent_]", divider="grey", width="content"
@@ -427,6 +429,9 @@ def display_session_actions():
                                                     st.session_state.find_session = (
                                                         False
                                                     )
+                                                    st.session_state.session_name = (
+                                                        resp["session"]["name"]
+                                                    )
                                                     st.rerun()
                                                 else:
                                                     st.toast(
@@ -436,13 +441,20 @@ def display_session_actions():
                                                         duration=7,
                                                     )
                                             except Exception as e:
-                                                pass
+                                                st.toast("Unable to load the session.")
+                                                logging.error(
+                                                    f"Failed to load session with id -> {load_sess_id}, err -> {e}"
+                                                )
 
                                     with similar_col2:
                                         st.write(sess[1])
 
-                            elif similar_req.status_code in (404, 500):
-                                st.info(similar_req.json()["msg"])
+                            else:
+                                st.session_state.find_session = False
+                                resp = similar_req.json()
+                                st.info(
+                                    resp["msg"] if "msg" in resp else resp["detail"]
+                                )
                         except Exception as e:
                             logging.error(
                                 f"Failed to complete request to the server -> {e}"
@@ -661,55 +673,116 @@ def chat():
             st.session_state.stored_prompt = None
 
         if st.session_state.session_id == "" and not st.session_state.ghost_session:
-            with st.spinner(""):
-                try:
-                    new_session = requests.post(
-                        url="http://localhost:8000/session/create",
-                        json={"prompt": prompt.text},
-                    )
+            try:
+                create_session = st.empty()
+                create_session.markdown("*creating session...*")
 
-                    if new_session.status_code != 201:
-                        resp = new_session.json()
-                        st.toast(
-                            resp["msg"] if "msg" in resp else resp["detail"],
-                            duration=7,
-                        )
-                        st.stop()
+                new_session = requests.post(
+                    url="http://localhost:8000/session/create",
+                    json={"prompt": prompt.text},
+                )
 
-                    st.session_state.session_id = new_session.json()["id"]
-                    st.session_state.session_uid = new_session.json()["uid"]
-                    st.session_state.session_name = new_session.json()["title"]
-                    st.session_state.update_view = True
-                    st.session_state.stored_prompt = prompt
-                    st.session_state.show_header = False
-                    st.rerun()
-
-                except Exception as e:
-                    logging.error(f"Failed to complete request to the server -> {e}")
-                    st.error(
-                        "Failed to create session \n couldn't communicate with the server."
+                if new_session.status_code != 201:
+                    resp = new_session.json()
+                    st.toast(
+                        resp["msg"] if "msg" in resp else resp["detail"],
+                        duration=7,
                     )
                     st.stop()
+
+                st.session_state.session_id = new_session.json()["id"]
+                st.session_state.session_uid = new_session.json()["uid"]
+                st.session_state.session_name = new_session.json()["title"]
+                st.session_state.update_view = True
+                st.session_state.stored_prompt = prompt
+                st.session_state.show_header = False
+                create_session.empty()
+                st.rerun()
+
+            except Exception as e:
+                logging.error(f"Failed to complete request to the server -> {e}")
+                st.error(
+                    "Failed to create session \n couldn't communicate with the server."
+                )
+                st.stop()
 
         st.session_state.chat_images, st.session_state.chat_files = filter_files(
             prompt.files
         )
 
         with st.chat_message("user"):
+            start_chat = st.empty()
+            start_chat.markdown("*starting chat...*")
             if not st.session_state.ghost_session:
-                with st.spinner(""):
-                    try:
-                        add_msg_response = requests.put(
-                            url="http://localhost:8000/session/msg/"
-                            + st.session_state.session_id
-                            + "/"
-                            + st.session_state.session_uid,
-                            json={
+                try:
+                    add_msg_response = requests.put(
+                        url="http://localhost:8000/session/msg/"
+                        + st.session_state.session_id
+                        + "/"
+                        + st.session_state.session_uid,
+                        json={
+                            "role": "user",
+                            "content": prompt.text,
+                            "timestamp": "",
+                            "files": [
+                                (base64.b64encode(file.read()).decode(), file.name)
+                                for file in st.session_state.chat_files
+                            ],
+                            "images": [
+                                (
+                                    base64.b64encode(image.read()).decode(),
+                                    image.type,
+                                    image.name,
+                                )
+                                for image in st.session_state.chat_images
+                            ],
+                        },
+                    )
+
+                    if add_msg_response.status_code != 202:
+                        resp = add_msg_response.json()
+                        st.toast(
+                            resp["msg"] if "msg" in resp else resp["detail"],
+                            duration=7,
+                        )
+                        st.stop()
+
+                except Exception as e:
+                    logging.error(f"Failed to complete request to the server -> {e}")
+                    st.error(
+                        "Failed to send message \n couldn't communicate with the server."
+                    )
+                    st.stop()
+
+            start_chat.markdown(prompt.text)
+            st.session_state.messages.append({"role": "user", "content": prompt.text})
+
+        with st.chat_message("assistant"):
+            try:
+
+                def stream_response():
+                    response_placeholder = st.empty()
+
+                    response_placeholder.markdown("*pondering on it...*")
+
+                    response_text = ""
+
+                    with httpx.stream(
+                        "POST",
+                        f"{API_URL}/agent/chat/stream",
+                        json={
+                            "session_id": st.session_state.session_id,
+                            "session_uid": st.session_state.session_uid,
+                            "user_id": st.session_state.user_id,
+                            "message": {
                                 "role": "user",
                                 "content": prompt.text,
                                 "timestamp": "",
                                 "files": [
-                                    (base64.b64encode(file.read()).decode(), file.name)
+                                    (
+                                        base64.b64encode(file.read()).decode(),
+                                        file.name,
+                                    )
                                     for file in st.session_state.chat_files
                                 ],
                                 "images": [
@@ -721,102 +794,61 @@ def chat():
                                     for image in st.session_state.chat_images
                                 ],
                             },
-                        )
+                            "ghost_session": st.session_state.ghost_session,
+                        },
+                        timeout=120,
+                    ) as r:
+                        for token in r.iter_text():
+                            chunk = json.loads(token)
 
-                        if add_msg_response.status_code != 202:
-                            resp = add_msg_response.json()
-                            st.toast(
-                                resp["msg"] if "msg" in resp else resp["detail"],
-                                duration=7,
-                            )
-                            st.stop()
+                            if chunk["type"] == "tool":
+                                response_placeholder.markdown(f"*{chunk['content']}*")
+                            elif chunk["type"] == "text":
+                                response_text += chunk["content"]
+                                response_placeholder.markdown(
+                                    f"{response_text}" + "\u2502"
+                                )
+                            elif chunk["type"] == "tool_end":
+                                response_placeholder.markdown("*working on it...*")
+                    response_placeholder.markdown(response_text)
 
-                    except Exception as e:
-                        logging.error(
-                            f"Failed to complete request to the server -> {e}"
-                        )
-                        st.error(
-                            "Failed to send message \n couldn't communicate with the server."
+                    return response_text
+
+                full_response = stream_response()
+
+                if not st.session_state.ghost_session:
+                    add_msg_response = requests.put(
+                        url="http://localhost:8000/session/msg/"
+                        + st.session_state.session_id
+                        + "/"
+                        + st.session_state.session_uid,
+                        json={
+                            "role": "assistant",
+                            "content": full_response,
+                            "timestamp": "",
+                            "images": [],
+                            "files": [],
+                        },
+                    )
+
+                    if add_msg_response.status_code != 202:
+                        resp = add_msg_response.json()
+                        st.toast(
+                            resp["msg"] if "msg" in resp else resp["detail"],
+                            duration=7,
                         )
                         st.stop()
 
-            st.markdown(prompt.text)
-            st.session_state.messages.append({"role": "user", "content": prompt.text})
+                st.session_state.messages.append(
+                    {"role": "assistant", "content": full_response}
+                )
 
-        with st.chat_message("assistant"):
-            with st.spinner("Thinking..."):
-                try:
-
-                    def stream_response():
-                        with httpx.stream(
-                            "POST",
-                            f"{API_URL}/agent/chat/stream",
-                            json={
-                                "session_id": st.session_state.session_id,
-                                "session_uid": st.session_state.session_uid,
-                                "user_id": st.session_state.user_id,
-                                "message": {
-                                    "role": "user",
-                                    "content": prompt.text,
-                                    "timestamp": "",
-                                    "files": [
-                                        (
-                                            base64.b64encode(file.read()).decode(),
-                                            file.name,
-                                        )
-                                        for file in st.session_state.chat_files
-                                    ],
-                                    "images": [
-                                        (
-                                            base64.b64encode(image.read()).decode(),
-                                            image.type,
-                                            image.name,
-                                        )
-                                        for image in st.session_state.chat_images
-                                    ],
-                                },
-                                "ghost_session": st.session_state.ghost_session,
-                            },
-                            timeout=120,
-                        ) as r:
-                            for token in r.iter_text():
-                                yield token
-
-                    full_response = st.write_stream(stream_response())
-
-                    if not st.session_state.ghost_session:
-                        add_msg_response = requests.put(
-                            url="http://localhost:8000/session/msg/"
-                            + st.session_state.session_id
-                            + "/"
-                            + st.session_state.session_uid,
-                            json={
-                                "role": "assistant",
-                                "content": full_response,
-                                "timestamp": None,
-                                "images": [],
-                                "files": [],
-                            },
-                        )
-
-                        if add_msg_response.status_code != 202:
-                            resp = add_msg_response.json()
-                            st.toast(
-                                resp["msg"] if "msg" in resp else resp["detail"],
-                                duration=7,
-                            )
-                            st.stop()
-
-                    st.session_state.messages.append(
-                        {"role": "assistant", "content": full_response}
-                    )
-
-                except Exception as e:
-                    logging.error(f"Failed to complete request to the server -> {e}")
-                    st.error(
-                        "Failed to chat with agent \n couldn't communicate with the server."
-                    )
-                    st.stop()
+            except Exception as e:
+                logging.error(f"Failed to complete request to the server -> {e}")
+                st.error(
+                    "Failed to chat with agent \n couldn't communicate with the server."
+                )
+                st.stop()
 
         if st.session_state.get("update_view"):
             st.rerun()

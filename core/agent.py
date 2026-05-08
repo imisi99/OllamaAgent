@@ -97,7 +97,7 @@ class Model:
             redDB = get_redis_database()
             msg = redDB.get_short_term_memory(session_id)
             if len(msg) > 30:
-                summarized = self.summarize_messagess(msg)
+                summarized = self.summarize_messages(msg)
                 if summarized is None:
                     return state
                 redDB.clear_short_term_memory(session_id)
@@ -158,6 +158,7 @@ class Model:
             response = await agent.ainvoke(
                 {
                     "session_id": session_id,
+                    "session_uid": state["session_uid"],
                     "user_id": state["user_id"],
                     "ghost_session": state["ghost_session"],
                     "messages": messages,
@@ -201,16 +202,60 @@ class Model:
 
     async def stream_chat(self, prompt: SessionState):
         """Yields token strings as they are generated."""
+        suppressing = False
         async for event in self.graph.astream_events(prompt, version="v2"):
+            checkpoint = event.get("metadata", {}).get("langgraph_checkpoint_ns", "")
             match event["event"]:
                 case "on_chat_model_stream":
-                    chunk = cast(AIMessageChunk, event["data"].get("chunk"))
-                    if chunk.content:
-                        yield chunk.content
-                case "on_tool_call_start":
-                    pass
-                case "on_tool_call_end":
-                    pass
+                    if not suppressing and "run_agent" in checkpoint:
+                        chunk = cast(AIMessageChunk, event["data"].get("chunk"))
+                        if chunk.content:
+                            yield {"type": "text", "content": chunk.content}
+                case "on_tool_start":
+                    tool_name = event["name"]
+                    match tool_name:
+                        case "get_user_info":
+                            yield {
+                                "type": "tool",
+                                "content": "fetching user information...",
+                            }
+                        case "get_user_location":
+                            yield {
+                                "type": "tool",
+                                "content": "fetching user location...",
+                            }
+                        case "get_current_time":
+                            yield {
+                                "type": "tool",
+                                "content": "fetching user local time",
+                            }
+                        case "get_time_and_location":
+                            yield {
+                                "type": "tool",
+                                "content": "fetching user location and time...",
+                            }
+                        case "web_search":
+                            yield {"type": "tool", "content": "searching the web..."}
+                        case "find_related_sessions":
+                            suppressing = True
+                            yield {
+                                "type": "tool",
+                                "content": "searching for related chats...",
+                            }
+                        case "save_insight_about_user":
+                            yield {
+                                "type": "tool",
+                                "content": "updating user memory...",
+                            }
+                        case "remove_insight_about_user":
+                            yield {
+                                "type": "tool",
+                                "content": "updating user memory...",
+                            }
+                case "on_tool_end":
+                    if event["name"] == "find_related_sessions":
+                        suppressing = False
+                    yield {"type": "tool_end", "content": ""}
 
     def load_document(self, files: list[tuple[bytes, str]]) -> list[Document]:
         loaders = {
@@ -325,7 +370,7 @@ class Model:
             logging.error(f"Failed to generate title -> {e}")
         return title
 
-    def summarize_messagess(self, messages: list[Message]) -> str | None:
+    def summarize_messages(self, messages: list[Message]) -> str | None:
         conversation = "\n".join(f"{m['role']}: {m['content']}" for m in messages)
 
         prompt = ChatPromptTemplate.from_messages(
@@ -339,7 +384,7 @@ class Model:
 
         chain = prompt | self.no_reason
         response = chain.invoke({})
-        self.log_llm_response(response, "SUMMARIZER")
+        self.log_llm_response([response], "SUMMARIZER")
         if isinstance(response.content, str):
             return response.content
 

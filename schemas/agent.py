@@ -20,5 +20,6 @@ class SessionState(SessionConversation):
 
 class SessAgentState(AgentState):
     session_id: str
+    session_uid: str
     ghost_session: bool
     user_id: str

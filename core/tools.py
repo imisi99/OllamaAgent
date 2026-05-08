@@ -160,25 +160,25 @@ def web_search(query: str, max_results: int = 5) -> list[dict] | str:
 @tool(parse_docstring=True)
 async def find_related_sessions(
     state: Annotated[SessAgentState, InjectedState],
-    query: str = "",
     use_query: bool = False,
-    score_threshold: float = 50.0,
+    query: str = "",
+    score_threshold: float = 0.50,
     limit: int = 2,
     summarize_chat: bool = True,
 ) -> str:
     """
     This finds past sessions that might be related to the current chat for more context
-    either using the whole current session or a query for specific search
+    either using the whole current session content or a query for specific search
 
     Args:
-        query: This is the optional field to use for particular keyword search (it defaults to "" )
         use_query: This indicates whether to use a query for the similarity search (this defaults to False)
-        score_threshold: This is the threshold for the similarity score (this defaults to 50.0)
+        query: This is the field to use for search (when use_query is True a query is required otherwise the whole session content is used)
+        score_threshold: This is the threshold for the similarity score (this defaults to 0.50)
         limit: This is the limit for the number of sessions to retrieve it might retrieve lower than the limit if few document pass the threshold (this defaults to 2)
-        summarize_chat: This indicates whether to summarize the retrieved chats if the number of retrieved chat is high (limit >= 2 then it should be True) (this defaults to True )
+        summarize_chat: This indicates whether to summarize the retrieved chats if the number of retrieved chat is high (limit >= 2 then it should be True) (this defaults to True)
     """
     result = await get_qdrant_database().get_related_points(
-        state["session_id"], query, score_threshold, use_query, limit
+        state["session_uid"], query, score_threshold, use_query, limit
     )
 
     if result is None:
@@ -195,7 +195,7 @@ async def find_related_sessions(
     if summarize_chat:
         for session in sessions:
             chats.append(
-                f"{session['name']}: \n SUMMARY: \n {get_model().summarize_messagess(session['messages'])}"
+                f"{session['name']}: \nSUMMARY: \n{get_model().summarize_messages(session['messages'])}"
             )
     else:
         for session in sessions:
@@ -205,18 +205,20 @@ async def find_related_sessions(
                 for msg in session["messages"]
             )
 
+    logging.info(f"Retrieval information for session with id {state['session_id']}")
+
     logging.info(
-        f"SCORE THRESHOLD: {score_threshold} \n LIMIT: {limit} \n AVERAGE SCORE: {avg_score} \n QUERY: {query} \n USE QUERY: {use_query}"
+        f"SCORE THRESHOLD -> {score_threshold}, LIMIT -> {limit}, AVERAGE SCORE -> {avg_score}, QUERY -> {query}, USE QUERY -> {use_query}"
     )
 
     logging.info(
-        f"RELEVANCE: {'\n'.join(f'ID -> {sess["_id"]}, NAME -> {sess["name"]} SCORE -> {score}' for sess, score in result[0])}"
+        f"RELEVANCE: \n{'\n'.join(f'ID -> {sess["_id"]}, NAME -> {sess["name"]}, SCORE -> {score}' for sess, score in result[0])}"
     )
 
     if summarize_chat:
-        logging.info(f"SUMMARY: \n {'\n'.join(chats)}")
+        logging.info(f"SUMMARY: \n{'\n'.join(chats)}")
 
-    return f"RETRIEVED CHATS: \n {'\n'.join(chats)}"
+    return f"RETRIEVED CHATS: {'\n'.join(chats)}"
 
 
 tools = [
