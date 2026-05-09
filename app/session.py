@@ -31,10 +31,25 @@ def create_session(
         sess: Session = {
             "_id": "",
             "uuid": uid,
-            "messages": [],
+            "messages": [
+                {
+                    "timestamp": datetime.datetime.now(),
+                    "content": prompt.prompt,
+                    "files": prompt.files,
+                    "images": prompt.images,
+                    "role": "user",
+                }
+            ],
             "created_at": datetime.datetime.now(),
             "name": title,
         }
+
+        for file in sess["messages"][0]["files"]:
+            file["file"] = base64.b64decode(file["file"])
+
+        for image in sess["messages"][0]["images"]:
+            image["image"] = base64.b64decode(image["image"])
+
         created, id = db.create_session(sess)
 
         if not created:
@@ -94,10 +109,8 @@ def add_message(
 ):
     try:
         message["timestamp"] = datetime.datetime.now()
-        strFiles = message["files"]
-        for i in range(len(strFiles)):
-            strFiles[i] = (base64.b64decode(strFiles[i][0]), strFiles[i][1])
-        message["files"] = strFiles
+        for file in message["files"]:
+            file["file"] = base64.b64decode(file["file"])
 
         for image in message["images"]:
             image["image"] = base64.b64decode(image["image"])

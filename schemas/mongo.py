@@ -8,10 +8,15 @@ class Image(TypedDict):
     name: str
 
 
+class File(TypedDict):
+    file: Any
+    name: str
+
+
 class Message(TypedDict):
     role: str
     content: str
-    files: list[tuple[Any, str]]
+    files: list[File]
     images: list[Image]
     timestamp: datetime | str
 

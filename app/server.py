@@ -1,13 +1,18 @@
+import asyncio
 import json
+from datetime import datetime
+import logging
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from core.agent import Model, get_model
+from core.mongo import Database
+from core.qdrant import Qdrant
+from db.mongo import get_mongo_database
+from db.qdrant import get_qdrant_database
 from schemas.agent import SessionConversation, SessionState
 
 serve = APIRouter()
-
-# TODO: Fix the on_stream_chat with the summarizer.
 
 
 @serve.post("/agent/chat")
@@ -29,7 +34,12 @@ async def chat_agent(input: SessionConversation, model: Model = Depends(get_mode
 
 
 @serve.post("/agent/chat/stream")
-async def stream_chat(input: SessionConversation, model: Model = Depends(get_model)):
+async def stream_chat(
+    input: SessionConversation,
+    model: Model = Depends(get_model),
+    db: Database = Depends(get_mongo_database),
+    qdb: Qdrant = Depends(get_qdrant_database),
+):
     session = SessionState(
         {
             "ghost_session": input["ghost_session"],
@@ -42,8 +52,60 @@ async def stream_chat(input: SessionConversation, model: Model = Depends(get_mod
         }
     )
 
+    queue: asyncio.Queue = asyncio.Queue()
+
+    async def run_and_save():
+        full_response = ""
+        try:
+            async for token in model.stream_chat(session):
+                await queue.put(token)
+                if token["type"] == "text":
+                    full_response += token["content"]
+
+        except Exception as e:
+            logging.error(f"[AGENT] Streaming error -> {e}")
+        finally:
+            await queue.put(None)
+            if not input["ghost_session"] and full_response:
+                mongo_updated = db.add_messages(
+                    input["session_id"],
+                    {
+                        "content": full_response,
+                        "role": "assistant",
+                        "timestamp": datetime.now(),
+                        "images": [],
+                        "files": [],
+                    },
+                )
+
+                if not mongo_updated:
+                    logging.error(
+                        "[AGENT][MONGO] Failed to update chat response to mongo"
+                    )
+
+                qdrant_updated = await qdb.update_point(
+                    input["session_uid"],
+                    {
+                        "content": full_response,
+                        "role": "assistant",
+                        "timestamp": datetime.now(),
+                        "images": [],
+                        "files": [],
+                    },
+                )
+
+                if not qdrant_updated:
+                    logging.error(
+                        "[AGENT][QDRANT] Failed to update chat response to qdrant"
+                    )
+
+    asyncio.create_task(run_and_save())
+
     async def token_generator():
-        async for token in model.stream_chat(session):
+        while True:
+            token = await queue.get()
+            if token is None:
+                break
             yield json.dumps(token)
 
     return StreamingResponse(

@@ -31,7 +31,7 @@ from pathlib import Path
 from core.qdrant import Qdrant
 from db.redis import get_redis_database
 from schemas.agent import SessAgentState, SessionState
-from schemas.mongo import Message
+from schemas.mongo import File, Message
 
 # TODO:
 # Add tools for the streaming also
@@ -257,7 +257,7 @@ class Model:
                         suppressing = False
                     yield {"type": "tool_end", "content": ""}
 
-    def load_document(self, files: list[tuple[bytes, str]]) -> list[Document]:
+    def load_document(self, files: list[File]) -> list[Document]:
         loaders = {
             ".pdf": PyPDFLoader,
             ".docx": Docx2txtLoader,
@@ -284,13 +284,13 @@ class Model:
             return RecursiveCharacterTextSplitter(chunk_size=512, chunk_overlap=50)
 
         chunks: list[Document] = []
-        for file, name in files:
-            ext = Path(name).suffix.lower()
+        for file in files:
+            ext = Path(file["name"]).suffix.lower()
             loader = loaders.get(ext) or (TextLoader if ext in language_map else None)
             if not loader:
                 raise ValueError(f"Unsupported file type: {ext}")
             with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
-                tmp.write(file)
+                tmp.write(file["file"])
                 tmp_path = tmp.name
 
             try:

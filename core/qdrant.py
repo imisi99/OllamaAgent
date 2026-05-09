@@ -55,6 +55,8 @@ class Qdrant:
 
     async def create_point(self, session: Session) -> bool:
         session["created_at"] = self.normalize_created_at(session["created_at"])
+        msg_time = session["messages"][0]["timestamp"]
+        session["messages"][0]["timestamp"] = self.normalize_created_at(msg_time)
         vector = await self.embedding.generate_vector_embedding(session)
         result = self.client.upsert(
             collection_name="chats",

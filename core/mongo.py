@@ -32,6 +32,8 @@ class Database:
 
     def create_session(self, session: Session) -> tuple[bool, str]:
         session["created_at"] = self.normalize_timestamp(session["created_at"])
+        msg_time = session["messages"][0]["timestamp"]
+        session["messages"][0]["timestamp"] = self.normalize_timestamp(msg_time)
         result = self.session_collection.insert_one(
             {
                 "uuid": session["uuid"],
