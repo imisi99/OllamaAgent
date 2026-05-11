@@ -56,11 +56,14 @@ async def stream_chat(
 
     async def run_and_save():
         full_response = ""
+        thought_response = ""
         try:
             async for token in model.stream_chat(session):
                 await queue.put(token)
                 if token["type"] == "text":
                     full_response += token["content"]
+                if token["type"] == "reason":
+                    thought_response += token["content"]
 
         except Exception as e:
             logging.error(f"[AGENT] Streaming error -> {e}")
@@ -71,6 +74,7 @@ async def stream_chat(
                     input["session_id"],
                     {
                         "content": full_response,
+                        "thought": thought_response,
                         "role": "assistant",
                         "timestamp": datetime.now(),
                         "images": [],
@@ -87,6 +91,7 @@ async def stream_chat(
                     input["session_uid"],
                     {
                         "content": full_response,
+                        "thought": thought_response,
                         "role": "assistant",
                         "timestamp": datetime.now(),
                         "images": [],

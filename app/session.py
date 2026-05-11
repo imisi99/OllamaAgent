@@ -34,6 +34,7 @@ def create_session(
             "messages": [
                 {
                     "timestamp": datetime.datetime.now(),
+                    "thought": "",
                     "content": prompt.prompt,
                     "files": prompt.files,
                     "images": prompt.images,
@@ -56,6 +57,13 @@ def create_session(
             raise Exception("MongoDB operation to create session was not acknowledged")
 
         sess["_id"] = id
+
+        for file in sess["messages"][0]["files"]:
+            file["file"] = file["file"]
+
+        for image in sess["messages"][0]["images"]:
+            image["image"] = image["image"]
+
         qdb.add_job(Task(job=Job.CREATE_POINT, session=sess))
 
         return JSONResponse(
@@ -109,6 +117,8 @@ def add_message(
 ):
     try:
         message["timestamp"] = datetime.datetime.now()
+        qdb.add_job(Task(job=Job.UPDATE_POINT, uid=session_uid, message=message))
+
         for file in message["files"]:
             file["file"] = base64.b64decode(file["file"])
 
@@ -118,8 +128,6 @@ def add_message(
         created = db.add_messages(session_id, message)
         if not created:
             raise Exception("MongoDB operation to add message was not acknowledged")
-
-        qdb.add_job(Task(job=Job.UPDATE_POINT, uid=session_uid, message=message))
 
         return JSONResponse(
             status_code=status.HTTP_202_ACCEPTED, content={"msg": "Message added."}

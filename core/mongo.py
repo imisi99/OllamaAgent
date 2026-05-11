@@ -55,6 +55,7 @@ class Database:
                 message.append(
                     {
                         "content": msg["content"],
+                        "thought": msg["thought"],
                         "role": msg["role"],
                         "timestamp": self.denormalize_timestamp(msg["timestamp"]),
                         "images": msg["images"],
@@ -88,6 +89,7 @@ class Database:
                 message.append(
                     {
                         "content": msg["content"],
+                        "thought": msg["thought"],
                         "role": msg["role"],
                         "images": msg["images"],
                         "files": msg["files"],
@@ -145,6 +147,7 @@ class Database:
                     Message(
                         {
                             "content": msg["content"],
+                            "thought": msg["thought"],
                             "role": msg["role"],
                             "timestamp": self.denormalize_timestamp(msg["timestamp"]),
                             "images": msg["images"],
@@ -181,6 +184,7 @@ class Database:
                     Message(
                         {
                             "content": msg["content"],
+                            "thought": msg["thought"],
                             "role": msg["role"],
                             "timestamp": self.denormalize_timestamp(msg["timestamp"]),
                             "images": [],

@@ -5,7 +5,6 @@ from pathlib import Path
 import time
 from typing import cast
 import httpx
-from numpy import imag
 import requests
 import streamlit as st
 
@@ -754,40 +753,43 @@ def chat():
                 )
                 st.stop()
 
-        if not st.session_state.ghost_session or not st.session_state.skip_message:
-            start_chat = st.empty()
-            start_chat.markdown("*starting chat...*")
-            try:
-                add_msg_response = requests.put(
-                    url="http://localhost:8000/session/msg/"
-                    + st.session_state.session_id
-                    + "/"
-                    + st.session_state.session_uid,
-                    json={
-                        "role": "user",
-                        "content": prompt.text,
-                        "timestamp": "",
-                        "files": st.session_state.chat_files,
-                        "images": st.session_state.chat_images,
-                    },
-                )
+        if not st.session_state.skip_message:
+            if not st.session_state.ghost_session:
+                start_chat = st.empty()
+                start_chat.markdown("*starting chat...*")
+                try:
+                    add_msg_response = requests.put(
+                        url="http://localhost:8000/session/msg/"
+                        + st.session_state.session_id
+                        + "/"
+                        + st.session_state.session_uid,
+                        json={
+                            "role": "user",
+                            "content": prompt.text,
+                            "thought": "",
+                            "timestamp": "",
+                            "files": st.session_state.chat_files,
+                            "images": st.session_state.chat_images,
+                        },
+                    )
 
-                if add_msg_response.status_code != 202:
-                    resp = add_msg_response.json()
-                    st.toast(
-                        resp["msg"] if "msg" in resp else resp["detail"],
-                        duration=7,
+                    if add_msg_response.status_code != 202:
+                        resp = add_msg_response.json()
+                        st.toast(
+                            resp["msg"] if "msg" in resp else resp["detail"],
+                            duration=7,
+                        )
+                        st.stop()
+
+                except Exception as e:
+                    logging.error(f"Failed to complete request to the server -> {e}")
+                    st.error(
+                        "Failed to send message \n couldn't communicate with the server."
                     )
                     st.stop()
 
-            except Exception as e:
-                logging.error(f"Failed to complete request to the server -> {e}")
-                st.error(
-                    "Failed to send message \n couldn't communicate with the server."
-                )
-                st.stop()
+                start_chat.empty()
 
-            start_chat.empty()
         user_bubble(prompt.text)
         st.session_state.messages.append({"role": "user", "content": prompt.text})
 
@@ -797,11 +799,15 @@ def chat():
         try:
 
             def stream_response():
+                thought_placeholder = st.empty()
                 response_placeholder = st.empty()
 
                 response_placeholder.markdown("*pondering on it...*")
+                if len(st.session_state.chat_images) > 0:
+                    response_placeholder.markdown("*Analyzing image...*")
 
                 response_text = ""
+                thought_text = ""
 
                 with httpx.stream(
                     "POST",
@@ -813,6 +819,7 @@ def chat():
                         "message": {
                             "role": "user",
                             "content": prompt.text,
+                            "thought": "",
                             "timestamp": "",
                             "files": st.session_state.chat_files,
                             "images": st.session_state.chat_images,
@@ -829,8 +836,13 @@ def chat():
                         elif chunk["type"] == "text":
                             response_text += chunk["content"]
                             response_placeholder.markdown(f"{response_text}" + "\u2502")
+                        elif chunk["type"] == "reason":
+                            thought_text += chunk["content"]
                         elif chunk["type"] == "tool_end":
                             response_placeholder.markdown("*working on it...*")
+
+                with thought_placeholder.popover("*thought...*"):
+                    st.write(thought_text)
                 response_placeholder.markdown(response_text)
 
                 return response_text

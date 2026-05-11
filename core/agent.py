@@ -105,6 +105,7 @@ class Model:
                     session_id,
                     {
                         "role": "system",
+                        "thought": "",
                         "content": f"SUMMARY: {summarized}",
                         "timestamp": datetime.now().isoformat(),
                         "images": [],
@@ -130,7 +131,7 @@ class Model:
                                 {
                                     "type": "image_url",
                                     "image_url": {
-                                        "url": f"data:{image['mime']};base64,{base64.b64encode(image['image']).decode()}"
+                                        "url": f"data:{image['mime']};base64,{image['image']}"
                                     },
                                 }
                                 for image in msg["images"]
@@ -165,13 +166,13 @@ class Model:
                 }
             )
 
-            logging.info(response)
             self.log_llm_response(response["messages"], "AGENT")
 
             get_redis_database().add_short_term_memory(
                 session_id,
                 {
                     "role": "assistant",
+                    "thought": "",
                     "content": response["messages"][-1].content,
                     "timestamp": datetime.now().isoformat(),
                     "images": [],
@@ -211,6 +212,11 @@ class Model:
                         chunk = cast(AIMessageChunk, event["data"].get("chunk"))
                         if chunk.content:
                             yield {"type": "text", "content": chunk.content}
+                        if chunk.additional_kwargs["reasoning_content"]:
+                            yield {
+                                "type": "reason",
+                                "content": chunk.additional_kwargs["reasoning_content"],
+                            }
                 case "on_tool_start":
                     tool_name = event["name"]
                     match tool_name:

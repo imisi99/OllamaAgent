@@ -16,6 +16,7 @@ class File(TypedDict):
 class Message(TypedDict):
     role: str
     content: str
+    thought: str
     files: list[File]
     images: list[Image]
     timestamp: datetime | str
