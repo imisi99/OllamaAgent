@@ -1,4 +1,3 @@
-import base64
 import logging
 import os
 import tempfile
@@ -34,16 +33,16 @@ from schemas.agent import SessAgentState, SessionState
 from schemas.mongo import File, Message
 
 # TODO:
-# Add tools for the streaming also
 # The prompt length is a factor causing slow response from the agent (reduce it)
-# In the logging llm response add a tools used and result and also is the time for the message the same across all the thoughts and tool calls
 
 # DONE:
+# Add tools for the streaming also
 # Work on the streaming of the response
 # The agent logging for the reasoning doesn't work with tool calls cause reasoning is done then
 # Work on adding the files also for the agent
 # Add a tool logging procedure also
 # Add parameters to the agent also like the session id and user id
+# In the logging llm response add a tools used and result and also is the time for the message the same across all the thoughts and tool calls
 
 
 class Model:
@@ -91,12 +90,16 @@ class Model:
 
             return state
 
-        # TODO: A way to store the images leading up to that point in the summary ?
         def maybe_summarize(state: SessionState) -> SessionState:
             session_id = state["session_id"]
             redDB = get_redis_database()
             msg = redDB.get_short_term_memory(session_id)
+            images = []
             if len(msg) > 30:
+                for m in msg:
+                    if len(m["images"]) > 0:
+                        images.extend(m["images"])
+
                 summarized = self.summarize_messages(msg)
                 if summarized is None:
                     return state
@@ -106,9 +109,9 @@ class Model:
                     {
                         "role": "system",
                         "thought": "",
-                        "content": f"SUMMARY: {summarized}",
+                        "content": f"SUMMARY OF THE CHAT SO FAR: {summarized}",
                         "timestamp": datetime.now().isoformat(),
-                        "images": [],
+                        "images": images,
                         "files": [],
                     },
                     True,
@@ -212,7 +215,7 @@ class Model:
                         chunk = cast(AIMessageChunk, event["data"].get("chunk"))
                         if chunk.content:
                             yield {"type": "text", "content": chunk.content}
-                        if chunk.additional_kwargs["reasoning_content"]:
+                        elif chunk.additional_kwargs["reasoning_content"]:
                             yield {
                                 "type": "reason",
                                 "content": chunk.additional_kwargs["reasoning_content"],

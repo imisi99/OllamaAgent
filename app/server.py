@@ -62,7 +62,7 @@ async def stream_chat(
                 await queue.put(token)
                 if token["type"] == "text":
                     full_response += token["content"]
-                if token["type"] == "reason":
+                elif token["type"] == "reason":
                     thought_response += token["content"]
 
         except Exception as e:

@@ -14,14 +14,15 @@ from streamlit.runtime.uploaded_file_manager import UploadedFile
 
 
 # TODO:
-# Adding the metrics (reasoning content, tool calls in the view also ? )
 # Fix the loading of file back for streamlit and also the images let it be empty if not in use
+# Getting a reasoning error after streaming ends ?
 
 
 # DONE:
 # It doesn't affect other windows the change
 # Moving between chats between conversations Doesn't get the chat stored (should a single API call be chained to use it ?)
 # (Or use a queue sort of to add messages to the stuff ? )
+# Adding the metrics (reasoning content, tool calls in the view also ? )
 
 
 API_URL = "http://localhost:8000"
@@ -56,7 +57,16 @@ st.markdown(
 )
 
 
-def user_bubble(content: str):
+def user_bubble(content: str, images: list[str]):
+    def get_mime(img: str) -> str:
+        if img.startswith("ivBOR"):
+            return "image/png"
+        return "image/jpeg"
+
+    images_html = ""
+    if images:
+        for img in images:
+            images_html += f'<img src="data:{get_mime};base64,{img}" style="max-width:100%; border-radius:10px; margin-bottom:6px; display:block;"/>'
     st.markdown(
         f"""
         <div class="bubble-wrapper user">
@@ -648,9 +658,7 @@ def session_sidebar():
                             st.stop()
 
 
-def filter_files(
-    upload_file: list[UploadedFile],
-) -> tuple[list[UploadedFile], list[UploadedFile]]:
+def filter_files(upload_file: list[UploadedFile]):
     images = []
     files = []
 
@@ -790,7 +798,7 @@ def chat():
 
                 start_chat.empty()
 
-        user_bubble(prompt.text)
+        user_bubble(prompt.text, st.session_state.chat_images)
         st.session_state.messages.append({"role": "user", "content": prompt.text})
 
         if st.session_state.skip_message:
@@ -872,8 +880,10 @@ def remove_active_session_from_sessions():
 def display_session_message():
     for msg in st.session_state.messages:
         if msg["role"] == "user":
-            user_bubble(msg["content"])
+            user_bubble(msg["content"], msg["images"])
         else:
+            with st.popover("*thought...*", type="tertiary"):
+                st.write(msg["thought"])
             st.markdown(msg["content"])
 
 
