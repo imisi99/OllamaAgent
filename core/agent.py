@@ -215,7 +215,7 @@ class Model:
                         chunk = cast(AIMessageChunk, event["data"].get("chunk"))
                         if chunk.content:
                             yield {"type": "text", "content": chunk.content}
-                        elif chunk.additional_kwargs["reasoning_content"]:
+                        else:
                             yield {
                                 "type": "reason",
                                 "content": chunk.additional_kwargs["reasoning_content"],
