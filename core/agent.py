@@ -215,10 +215,12 @@ class Model:
                         chunk = cast(AIMessageChunk, event["data"].get("chunk"))
                         if chunk.content:
                             yield {"type": "text", "content": chunk.content}
-                        else:
+                        elif chunk.additional_kwargs.get("reasoning_content"):
                             yield {
                                 "type": "reason",
-                                "content": chunk.additional_kwargs["reasoning_content"],
+                                "content": chunk.additional_kwargs.get(
+                                    "reasoning_content"
+                                ),
                             }
                 case "on_tool_start":
                     tool_name = event["name"]

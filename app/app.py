@@ -849,7 +849,7 @@ def chat():
                         elif chunk["type"] == "tool_end":
                             response_placeholder.markdown("*working on it...*")
 
-                with thought_placeholder.popover("*thought...*"):
+                with thought_placeholder.popover("*thought...*", type="tertiary"):
                     st.write(thought_text)
                 response_placeholder.markdown(response_text)
 
@@ -879,6 +879,7 @@ def remove_active_session_from_sessions():
 
 def display_session_message():
     for msg in st.session_state.messages:
+        print(msg)
         if msg["role"] == "user":
             user_bubble(msg["content"], msg["images"])
         else:
