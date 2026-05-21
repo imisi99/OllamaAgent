@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import logging
 from datetime import datetime
 from enum import Enum
@@ -14,7 +15,7 @@ from qdrant_client.models import (
 )
 from qdrant_client.http.models import UpdateStatus
 from .emb import EmbeddingModel
-from schemas.mongo import Message, Session
+from schemas.mongo import Message, Session, Image, File
 
 
 class Job(str, Enum):
@@ -55,8 +56,8 @@ class Qdrant:
 
     async def create_point(self, session: Session) -> bool:
         session["created_at"] = self.normalize_created_at(session["created_at"])
-        msg_time = session["messages"][0]["timestamp"]
-        session["messages"][0]["timestamp"] = self.normalize_created_at(msg_time)
+        msg = session["messages"][0]
+        msg["timestamp"] = self.normalize_created_at(msg["timestamp"])
         vector = await self.embedding.generate_vector_embedding(session)
         result = self.client.upsert(
             collection_name="chats",

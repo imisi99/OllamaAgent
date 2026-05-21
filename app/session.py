@@ -1,4 +1,4 @@
-import base64
+import copy
 import logging
 import datetime
 from uuid import uuid4
@@ -45,24 +45,12 @@ def create_session(
             "name": title,
         }
 
-        for file in sess["messages"][0]["files"]:
-            file["file"] = base64.b64decode(file["file"])
-
-        for image in sess["messages"][0]["images"]:
-            image["image"] = base64.b64decode(image["image"])
-
-        created, id = db.create_session(sess)
+        created, id = db.create_session(copy.deepcopy(sess))
 
         if not created:
             raise Exception("MongoDB operation to create session was not acknowledged")
 
         sess["_id"] = id
-
-        for file in sess["messages"][0]["files"]:
-            file["file"] = file["file"]
-
-        for image in sess["messages"][0]["images"]:
-            image["image"] = image["image"]
 
         qdb.add_job(Task(job=Job.CREATE_POINT, session=sess))
 
@@ -117,17 +105,11 @@ def add_message(
 ):
     try:
         message["timestamp"] = datetime.datetime.now()
-        qdb.add_job(Task(job=Job.UPDATE_POINT, uid=session_uid, message=message))
-
-        for file in message["files"]:
-            file["file"] = base64.b64decode(file["file"])
-
-        for image in message["images"]:
-            image["image"] = base64.b64decode(image["image"])
-
-        created = db.add_messages(session_id, message)
+        created = db.add_messages(session_id, copy.deepcopy(message))
         if not created:
             raise Exception("MongoDB operation to add message was not acknowledged")
+
+        qdb.add_job(Task(job=Job.UPDATE_POINT, uid=session_uid, message=message))
 
         return JSONResponse(
             status_code=status.HTTP_202_ACCEPTED, content={"msg": "Message added."}

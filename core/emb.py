@@ -4,7 +4,7 @@ from typing import Optional
 
 from schemas.mongo import Session
 
-# TODO: Remove noise from the json like time and id and stuff
+# DONE: Remove noise from the json like time and id and stuff
 
 
 class EmbeddingModel:
@@ -12,7 +12,10 @@ class EmbeddingModel:
         self.EMB_MODEL = emb_model
 
     async def generate_vector_embedding(self, session: Session) -> list[float]:
-        text = json.dumps(session)
+        info = {}
+        info["name"] = session["name"]
+        info["messages"] = [{"msg": msg["content"]} for msg in session["messages"]]
+        text = json.dumps(info)
         vector = await self.EMB_MODEL.aembed_query(text)
         return vector
 

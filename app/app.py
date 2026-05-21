@@ -15,7 +15,6 @@ from streamlit.runtime.uploaded_file_manager import UploadedFile
 
 # TODO:
 # Fix the loading of file back for streamlit and also the images let it be empty if not in use
-# Getting a reasoning error after streaming ends ?
 
 
 # DONE:
@@ -23,6 +22,7 @@ from streamlit.runtime.uploaded_file_manager import UploadedFile
 # Moving between chats between conversations Doesn't get the chat stored (should a single API call be chained to use it ?)
 # (Or use a queue sort of to add messages to the stuff ? )
 # Adding the metrics (reasoning content, tool calls in the view also ? )
+# Getting a reasoning error after streaming ends ?
 
 
 API_URL = "http://localhost:8000"
@@ -57,7 +57,7 @@ st.markdown(
 )
 
 
-def user_bubble(content: str, images: list[str]):
+def user_bubble(content: str, images: list):
     def get_mime(img: str) -> str:
         if img.startswith("ivBOR"):
             return "image/png"
@@ -714,10 +714,6 @@ def chat():
             prompt = st.session_state.stored_prompt
             st.session_state.stored_prompt = None
 
-        st.session_state.chat_files, st.session_state.chat_images = filter_files(
-            prompt.files
-        )
-
         if "skip_message" not in st.session_state:
             st.session_state.skip_message = False
 
@@ -761,6 +757,10 @@ def chat():
                 )
                 st.stop()
 
+        st.session_state.chat_files, st.session_state.chat_images = filter_files(
+            prompt.files
+        )
+
         if not st.session_state.skip_message:
             if not st.session_state.ghost_session:
                 start_chat = st.empty()
@@ -799,20 +799,26 @@ def chat():
                 start_chat.empty()
 
         user_bubble(prompt.text, st.session_state.chat_images)
-        st.session_state.messages.append({"role": "user", "content": prompt.text})
+        st.session_state.messages.append(
+            {
+                "role": "user",
+                "content": prompt.text,
+                "images": st.session_state.chat_images,
+            }
+        )
 
         if st.session_state.skip_message:
             st.session_state.skip_message = False
 
         try:
 
-            def stream_response():
+            def stream_response() -> tuple[str, str]:
                 thought_placeholder = st.empty()
                 response_placeholder = st.empty()
 
-                response_placeholder.markdown("*pondering on it...*")
+                thought_placeholder.markdown("*pondering on it...*")
                 if len(st.session_state.chat_images) > 0:
-                    response_placeholder.markdown("*Analyzing image...*")
+                    thought_placeholder.markdown("*Analyzing image...*")
 
                 response_text = ""
                 thought_text = ""
@@ -842,9 +848,15 @@ def chat():
                         if chunk["type"] == "tool":
                             response_placeholder.markdown(f"*{chunk['content']}*")
                         elif chunk["type"] == "text":
+                            if response_text == "":
+                                with thought_placeholder.popover(
+                                    "*thought...*", type="tertiary"
+                                ):
+                                    st.write(thought_text)
                             response_text += chunk["content"]
                             response_placeholder.markdown(f"{response_text}" + "\u2502")
                         elif chunk["type"] == "reason":
+                            thought_placeholder.markdown("*pondering on it...*")
                             thought_text += chunk["content"]
                         elif chunk["type"] == "tool_end":
                             response_placeholder.markdown("*working on it...*")
@@ -853,11 +865,11 @@ def chat():
                     st.write(thought_text)
                 response_placeholder.markdown(response_text)
 
-                return response_text
+                return response_text, thought_text
 
-            full_response = stream_response()
+            full_response, full_thought = stream_response()
             st.session_state.messages.append(
-                {"role": "assistant", "content": full_response}
+                {"role": "assistant", "content": full_response, "thought": full_thought}
             )
 
         except Exception as e:
@@ -879,7 +891,6 @@ def remove_active_session_from_sessions():
 
 def display_session_message():
     for msg in st.session_state.messages:
-        print(msg)
         if msg["role"] == "user":
             user_bubble(msg["content"], msg["images"])
         else:

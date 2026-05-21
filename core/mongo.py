@@ -1,9 +1,10 @@
+import base64
 from datetime import datetime
 import logging
 from typing import Any
 from bson import ObjectId
 from pymongo import MongoClient
-from schemas.mongo import Message, Session, User
+from schemas.mongo import File, Image, Message, Session, User
 
 # TODO:
 # Change the timestamp and created at to datetime object and then make it a union for sorting
@@ -30,10 +31,24 @@ class Database:
             return timestamp.isoformat()
         return timestamp
 
+    def normalize_image_files(self, images: list[Image], files: list[File]):
+        for image in images:
+            image["image"] = base64.b64decode(image["image"])
+        for file in files:
+            file["file"] = base64.b64decode(file["file"])
+
+    def denormalize_image_files(self, images: list[Image], files: list[File]):
+        for image in images:
+            image["image"] = base64.b64encode(image["image"]).decode()
+        for file in files:
+            file["file"] = base64.b64encode(file["file"]).decode()
+
     def create_session(self, session: Session) -> tuple[bool, str]:
         session["created_at"] = self.normalize_timestamp(session["created_at"])
-        msg_time = session["messages"][0]["timestamp"]
-        session["messages"][0]["timestamp"] = self.normalize_timestamp(msg_time)
+        msg = session["messages"][0]
+        msg_time = msg["timestamp"]
+        msg["timestamp"] = self.normalize_timestamp(msg_time)
+        self.normalize_image_files(msg["images"], msg["files"])
         result = self.session_collection.insert_one(
             {
                 "uuid": session["uuid"],
@@ -52,6 +67,7 @@ class Database:
         if result is not None:
             message: list[Message] = []
             for msg in result["messages"]:
+                self.denormalize_image_files(msg["images"], msg["files"])
                 message.append(
                     {
                         "content": msg["content"],
@@ -86,6 +102,7 @@ class Database:
         for session in sessions:
             message: list[Message] = []
             for msg in session["messages"]:
+                self.denormalize_image_files(msg["images"], msg["files"])
                 message.append(
                     {
                         "content": msg["content"],
@@ -143,6 +160,7 @@ class Database:
         for session in sessions:
             message: list[Message] = []
             for msg in session["messages"]:
+                self.denormalize_image_files(msg["images"], msg["files"])
                 message.append(
                     Message(
                         {
@@ -215,6 +233,7 @@ class Database:
         return result.acknowledged
 
     def add_messages(self, session_id: str, message: Message) -> bool:
+        self.normalize_image_files(message["images"], message["files"])
         message["timestamp"] = self.normalize_timestamp(message["timestamp"])
         result = self.session_collection.update_one(
             {"_id": ObjectId(session_id)}, {"$push": {"messages": message}}
