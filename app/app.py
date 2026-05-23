@@ -1,4 +1,5 @@
 import base64
+import html
 import logging
 import json
 from pathlib import Path
@@ -9,6 +10,7 @@ import requests
 import streamlit as st
 
 
+from streamlit_float import float_init
 from streamlit.elements.widgets.chat import ChatInputValue
 from streamlit.runtime.uploaded_file_manager import UploadedFile
 
@@ -24,8 +26,25 @@ from streamlit.runtime.uploaded_file_manager import UploadedFile
 # Adding the metrics (reasoning content, tool calls in the view also ? )
 # Getting a reasoning error after streaming ends ?
 
+float_init()
 
 API_URL = "http://localhost:8000"
+TEXT_EXTS = {
+    ".py",
+    ".txt",
+    ".json",
+    ".md",
+    ".yaml",
+    ".yml",
+    ".toml",
+    ".csv",
+    ".js",
+    ".ts",
+    ".go",
+    ".rs",
+    ".java",
+    ".html",
+}
 
 st.markdown(
     """
@@ -57,22 +76,48 @@ st.markdown(
 )
 
 
-def user_bubble(content: str, images: list):
-    def get_mime(img: str) -> str:
-        if img.startswith("ivBOR"):
-            return "image/png"
-        return "image/jpeg"
-
+def user_bubble(content: str, images: list, files: list):
     images_html = ""
     if images:
-        for img in images:
-            images_html += f'<img src="data:{get_mime};base64,{img}" style="max-width:100%; border-radius:10px; margin-bottom:6px; display:block;"/>'
+        imgs = "".join(
+            f'<img src="data:{img["mime"]};base64,{img["image"]}" '
+            f'style="height:160px;width:160px;object-fit:cover;border-radius:8px;flex-shrink:0;"/>'
+            for img in images
+        )
+        images_html = f'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">{imgs}</div>'
+
+    files_html = ""
+    if files:
+        chips = ""
+        for f in files:
+            ext = Path(f["name"]).suffix.lower()
+            if ext in TEXT_EXTS:
+                try:
+                    text = base64.b64decode(f["file"]).decode("utf-8", errors="replace")
+                    escaped = html.escape(text)
+                    preview = (
+                        f'<pre style="margin:6px 0 0;padding:8px;background:rgba(0,0,0,0.3);'
+                        f"border-radius:6px;font-size:0.72rem;overflow:auto;"
+                        f'white-space:pre-wrap;max-height:180px;">{escaped}</pre>'
+                    )
+                except Exception:
+                    preview = ""
+            else:
+                preview = '<p style="font-size:0.75rem;margin:6px 0;opacity:0.6;">No preview available</p>'
+
+            chips += (
+                f'<details style="background:rgba(255,255,255,0.1);border-radius:8px;padding:4px 10px;margin-bottom:4px;">'
+                f'<summary style="cursor:pointer;font-size:0.8rem;list-style:none;">📎 {html.escape(f["name"])}</summary>'
+                f"{preview}"
+                f"</details>"
+            )
+        files_html = f'<div style="margin-bottom:8px;">{chips}</div>'
+
+    safe_content = html.escape(content).replace("\n", "<br/>")
     st.markdown(
-        f"""
-        <div class="bubble-wrapper user">
-            <div class="bubble user">{content}</div>
-        </div>
-        """,
+        f'<div class="bubble-wrapper user"><div class="bubble user">'
+        f"{images_html}{files_html}{safe_content}"
+        f"</div></div>",
         unsafe_allow_html=True,
     )
 
@@ -315,79 +360,33 @@ def user_profile():
 
 def display_session_actions():
     if not st.session_state.ghost_session and not st.session_state.show_header:
-        name = ""
-        if st.session_state.session_id == "":
-            name = "Untitled"
-        else:
-            name = st.session_state.session_name
-        with st.expander(label=name, width=350):
 
-            @st.dialog("Rename Session")
-            def rename_sess():
-                new_name = st.text_input(
-                    "Enter New Name", value=st.session_state.session_name
-                )
-                if st.button("Confirm", key="confirm_rename"):
-                    if new_name:
-                        with st.spinner():
-                            try:
-                                rename_req = requests.put(
-                                    url="http://localhost:8000/session/rename/"
-                                    + st.session_state.session_id
-                                    + "/"
-                                    + st.session_state.session_uid
-                                    + "?name="
-                                    + new_name
-                                )
-
-                                if rename_req.status_code == 202:
-                                    st.toast("Session renamed successfully.")
-                                    st.session_state.session_name = new_name
-                                    st.session_state.update_view = True
-                                    time.sleep(0.5)
-                                    st.rerun()
-                                else:
-                                    resp = rename_req.json()
-                                    st.toast(
-                                        resp["msg"]
-                                        if "msg" in resp
-                                        else resp["detail"],
-                                        duration=6,
-                                    )
-
-                            except Exception as e:
-                                logging.error(
-                                    f"Failed to complete request to the server -> {e}"
-                                )
-                                st.error(
-                                    "Failed to rename session \n couldn't communicate with the server."
-                                )
-
-            @st.dialog("Delete Session")
-            def delete_sess():
-                if st.button("Confirm", key="confirm_delete"):
+        @st.dialog("Rename Session")
+        def rename_sess():
+            new_name = st.text_input(
+                "Enter New Name", value=st.session_state.session_name
+            )
+            if st.button("Confirm", key="confirm_rename"):
+                if new_name:
                     with st.spinner():
                         try:
-                            delete_req = requests.delete(
-                                url="http://localhost:8000/session/delete/"
+                            rename_req = requests.put(
+                                url="http://localhost:8000/session/rename/"
                                 + st.session_state.session_id
                                 + "/"
-                                + st.session_state.session_uid,
+                                + st.session_state.session_uid
+                                + "?name="
+                                + new_name
                             )
 
-                            if delete_req.status_code == 200:
-                                st.toast("Session deleted successfully")
+                            if rename_req.status_code == 202:
+                                st.toast("Session renamed successfully.")
+                                st.session_state.session_name = new_name
                                 st.session_state.update_view = True
-                                remove_active_session_from_sessions()
-                                st.session_state.session_id = ""
-                                st.session_state.session_uid = ""
-                                st.session_state.messages = []
-                                st.session_state.session_name = ""
-                                st.session_state.show_header = True
                                 time.sleep(0.5)
                                 st.rerun()
                             else:
-                                resp = delete_req.json()
+                                resp = rename_req.json()
                                 st.toast(
                                     resp["msg"] if "msg" in resp else resp["detail"],
                                     duration=6,
@@ -398,115 +397,154 @@ def display_session_actions():
                                 f"Failed to complete request to the server -> {e}"
                             )
                             st.error(
-                                "Failed to delete session \n couldn't communicate with the server."
+                                "Failed to rename session \n couldn't communicate with the server."
                             )
 
-            @st.dialog("Find Similar Sessions")
-            def find_similar_sess():
-                threshold = st.number_input(
-                    "Enter threshold", min_value=0.0, max_value=1.0, value=0.5
-                )
-                limit = st.number_input(
-                    "Enter limit", min_value=1, max_value=100, value=5
-                )
-                if st.button("Find Sessions") or st.session_state.get("find_session"):
-                    st.session_state.find_session = True
-                    with st.spinner("Finding sessions..."):
-                        try:
-                            similar_req = requests.get(
-                                url=f"{API_URL}/session/find/similar",
-                                json={
-                                    "uid": st.session_state.session_uid,
-                                    "threshold": threshold,
-                                    "limit": limit,
-                                },
+        @st.dialog("Delete Session")
+        def delete_sess():
+            if st.button("Confirm", key="confirm_delete"):
+                with st.spinner():
+                    try:
+                        delete_req = requests.delete(
+                            url="http://localhost:8000/session/delete/"
+                            + st.session_state.session_id
+                            + "/"
+                            + st.session_state.session_uid,
+                        )
+
+                        if delete_req.status_code == 200:
+                            st.toast("Session deleted successfully")
+                            st.session_state.update_view = True
+                            remove_active_session_from_sessions()
+                            st.session_state.session_id = ""
+                            st.session_state.session_uid = ""
+                            st.session_state.messages = []
+                            st.session_state.session_name = ""
+                            st.session_state.show_header = True
+                            time.sleep(0.5)
+                            st.rerun()
+                        else:
+                            resp = delete_req.json()
+                            st.toast(
+                                resp["msg"] if "msg" in resp else resp["detail"],
+                                duration=6,
                             )
 
-                            if similar_req.status_code == 200:
-                                sessions, avgScore = (
-                                    similar_req.json()["sessions"],
-                                    similar_req.json()["score"],
-                                )
+                    except Exception as e:
+                        logging.error(
+                            f"Failed to complete request to the server -> {e}"
+                        )
+                        st.error(
+                            "Failed to delete session \n couldn't communicate with the server."
+                        )
 
-                                st.write(
-                                    f" Retrieved {len(sessions)} sessions with an average score of -> {avgScore}"
-                                )
+        @st.dialog("Find Similar Sessions")
+        def find_similar_sess():
+            threshold = st.number_input(
+                "Enter threshold", min_value=0.0, max_value=1.0, value=0.5
+            )
+            limit = st.number_input("Enter limit", min_value=1, max_value=100, value=5)
+            if st.button("Find Sessions") or st.session_state.get("find_session"):
+                st.session_state.find_session = True
+                with st.spinner("Finding sessions..."):
+                    try:
+                        similar_req = requests.get(
+                            url=f"{API_URL}/session/find/similar",
+                            json={
+                                "uid": st.session_state.session_uid,
+                                "threshold": threshold,
+                                "limit": limit,
+                            },
+                        )
 
-                                similar_col1, similar_col2 = st.columns([0.8, 0.2])
-                                for sess in sessions:
-                                    with similar_col1:
-                                        load_sess_id = sess[0]["_id"]
-                                        load_sess_uid = sess[0]["uuid"]
-                                        if st.button(sess[0]["name"]):
-                                            try:
-                                                message_req = requests.get(
-                                                    url=f"{API_URL}/session/"
-                                                    + load_sess_id,
+                        if similar_req.status_code == 200:
+                            sessions, avgScore = (
+                                similar_req.json()["sessions"],
+                                similar_req.json()["score"],
+                            )
+
+                            st.write(
+                                f" Retrieved {len(sessions)} sessions with an average score of -> {avgScore}"
+                            )
+
+                            similar_col1, similar_col2 = st.columns([0.8, 0.2])
+                            for sess in sessions:
+                                with similar_col1:
+                                    load_sess_id = sess[0]["_id"]
+                                    load_sess_uid = sess[0]["uuid"]
+                                    if st.button(sess[0]["name"]):
+                                        try:
+                                            message_req = requests.get(
+                                                url=f"{API_URL}/session/"
+                                                + load_sess_id,
+                                            )
+
+                                            resp = message_req.json()
+
+                                            if message_req.status_code == 200:
+                                                st.session_state.session_id = (
+                                                    load_sess_id
                                                 )
-
-                                                resp = message_req.json()
-
-                                                if message_req.status_code == 200:
-                                                    st.session_state.session_id = (
-                                                        load_sess_id
-                                                    )
-                                                    st.session_state.session_uid = (
-                                                        load_sess_uid
-                                                    )
-                                                    st.session_state.ghost_session = (
-                                                        False
-                                                    )
-                                                    st.session_state.show_header = False
-                                                    st.session_state.messages = resp[
-                                                        "session"
-                                                    ]["messages"]
-                                                    st.session_state.find_session = (
-                                                        False
-                                                    )
-                                                    st.session_state.session_name = (
-                                                        resp["session"]["name"]
-                                                    )
-                                                    st.rerun()
-                                                else:
-                                                    st.toast(
-                                                        resp["msg"]
-                                                        if "msg" in resp
-                                                        else resp["detail"],
-                                                        duration=7,
-                                                    )
-                                            except Exception as e:
-                                                st.toast("Unable to load the session.")
-                                                logging.error(
-                                                    f"Failed to load session with id -> {load_sess_id}, err -> {e}"
+                                                st.session_state.session_uid = (
+                                                    load_sess_uid
                                                 )
+                                                st.session_state.ghost_session = False
+                                                st.session_state.show_header = False
+                                                st.session_state.messages = resp[
+                                                    "session"
+                                                ]["messages"]
+                                                st.session_state.find_session = False
+                                                st.session_state.session_name = resp[
+                                                    "session"
+                                                ]["name"]
+                                                st.rerun()
+                                            else:
+                                                st.toast(
+                                                    resp["msg"]
+                                                    if "msg" in resp
+                                                    else resp["detail"],
+                                                    duration=7,
+                                                )
+                                        except Exception as e:
+                                            st.toast("Unable to load the session.")
+                                            logging.error(
+                                                f"Failed to load session with id -> {load_sess_id}, err -> {e}"
+                                            )
 
-                                    with similar_col2:
-                                        st.write(sess[1])
+                                with similar_col2:
+                                    st.write(sess[1])
 
-                            else:
-                                st.session_state.find_session = False
-                                resp = similar_req.json()
-                                st.info(
-                                    resp["msg"] if "msg" in resp else resp["detail"]
-                                )
-                        except Exception as e:
-                            logging.error(
-                                f"Failed to complete request to the server -> {e}"
-                            )
-                            st.error(
-                                "Failed to find similar sessions, couldn't communicate with the server."
-                            )
+                        else:
+                            st.session_state.find_session = False
+                            resp = similar_req.json()
+                            st.info(resp["msg"] if "msg" in resp else resp["detail"])
+                    except Exception as e:
+                        logging.error(
+                            f"Failed to complete request to the server -> {e}"
+                        )
+                        st.error(
+                            "Failed to find similar sessions, couldn't communicate with the server."
+                        )
 
-            col1, col2, col3 = st.columns([0.34, 0.3, 0.37])
-            with col1:
+        name = ""
+        if st.session_state.session_id == "":
+            name = "Untitled"
+        else:
+            name = st.session_state.session_name
+
+        session_actions = st.container()
+
+        with session_actions:
+            with st.expander(label=name):
                 if st.button("Rename"):
                     rename_sess()
-            with col2:
                 if st.button("Delete"):
                     delete_sess()
-            with col3:
                 if st.button("Similar"):
                     find_similar_sess()
+        session_actions.float(
+            "top: 60px; background-color: rgba(38, 39, 48, 0.75); backdrop-filter: blur(8px); --webkit-backdrop-filter: blur(8px); z-index: 99;"
+        )
 
 
 def get_or_create_user():
@@ -705,7 +743,11 @@ def filter_files(upload_file: list[UploadedFile]):
 
 def chat():
     if (
-        prompt := st.chat_input("", key="chat", accept_file="multiple")
+        prompt := st.chat_input(
+            "",
+            key="chat",
+            accept_file="multiple",
+        )
         or st.session_state.stored_prompt is not None
     ):
         prompt = cast(ChatInputValue, prompt)
@@ -716,6 +758,11 @@ def chat():
 
         if "skip_message" not in st.session_state:
             st.session_state.skip_message = False
+
+        if not st.session_state.skip_message:
+            st.session_state.chat_files, st.session_state.chat_images = filter_files(
+                prompt.files
+            )
 
         if st.session_state.session_id == "" and not st.session_state.ghost_session:
             try:
@@ -757,10 +804,6 @@ def chat():
                 )
                 st.stop()
 
-        st.session_state.chat_files, st.session_state.chat_images = filter_files(
-            prompt.files
-        )
-
         if not st.session_state.skip_message:
             if not st.session_state.ghost_session:
                 start_chat = st.empty()
@@ -798,12 +841,15 @@ def chat():
 
                 start_chat.empty()
 
-        user_bubble(prompt.text, st.session_state.chat_images)
+        user_bubble(
+            prompt.text, st.session_state.chat_images, st.session_state.chat_files
+        )
         st.session_state.messages.append(
             {
                 "role": "user",
                 "content": prompt.text,
                 "images": st.session_state.chat_images,
+                "files": st.session_state.chat_files,
             }
         )
 
@@ -892,7 +938,7 @@ def remove_active_session_from_sessions():
 def display_session_message():
     for msg in st.session_state.messages:
         if msg["role"] == "user":
-            user_bubble(msg["content"], msg["images"])
+            user_bubble(msg["content"], msg["images"], msg["files"])
         else:
             with st.popover("*thought...*", type="tertiary"):
                 st.write(msg["thought"])

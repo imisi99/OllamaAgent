@@ -1,3 +1,4 @@
+import base64
 import logging
 import os
 import tempfile
@@ -290,7 +291,7 @@ class Model:
             lang = language_map.get(ext)
             if lang:
                 return RecursiveCharacterTextSplitter.from_language(
-                    language=lang, chunk_size=512, chunk_overlap=50
+                    language=lang, chunk_size=2048, chunk_overlap=200
                 )
             return RecursiveCharacterTextSplitter(chunk_size=512, chunk_overlap=50)
 
@@ -301,7 +302,7 @@ class Model:
             if not loader:
                 raise ValueError(f"Unsupported file type: {ext}")
             with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
-                tmp.write(file["file"])
+                tmp.write(base64.b64decode(file["file"]))
                 tmp_path = tmp.name
 
             try:

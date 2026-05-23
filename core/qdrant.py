@@ -1,19 +1,23 @@
 import asyncio
 import base64
+import collections
 import logging
 from datetime import datetime
 from enum import Enum
 from typing import Union, cast
 from uuid import uuid4
+from httpx import delete
 from langchain_core.documents import Document
 from qdrant_client import QdrantClient
 from qdrant_client.models import (
     FieldCondition,
     Filter,
+    FilterSelector,
     MatchValue,
     PointStruct,
 )
 from qdrant_client.http.models import UpdateStatus
+from redis import client
 from .emb import EmbeddingModel
 from schemas.mongo import Message, Session, Image, File
 
@@ -225,6 +229,15 @@ class Qdrant:
             return False
 
         result = self.client.delete(collection_name="chats", points_selector=[id])
+
+        result = self.client.delete(
+            collection_name="chats",
+            points_selector=FilterSelector(
+                filter=Filter(
+                    must=[FieldCondition(key="session_id", match=MatchValue(value=id))]
+                )
+            ),
+        )
 
         success = result.status in (UpdateStatus.COMPLETED, UpdateStatus.ACKNOWLEDGED)
         if not success:
