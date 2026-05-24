@@ -134,6 +134,7 @@ def web_search(query: str, max_results: int = 5) -> list[dict] | str:
         resp = httpx.get(
             "http://searxng:8080/search",
             params={"q": query, "format": "json", "engines": "google,bing,duckduckgo"},
+            timeout=10,
         )
     except Exception as e:
         logging.info(

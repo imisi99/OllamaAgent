@@ -77,49 +77,95 @@ st.markdown(
 
 
 def user_bubble(content: str, images: list, files: list):
-    images_html = ""
-    if images:
-        imgs = "".join(
-            f'<img src="data:{img["mime"]};base64,{img["image"]}" '
-            f'style="height:160px;width:160px;object-fit:cover;border-radius:8px;flex-shrink:0;"/>'
-            for img in images
-        )
-        images_html = f'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">{imgs}</div>'
+    # This creates a native, beautifully styled user chat container
+    with st.chat_message("user"):
+        # 1. Handle Images in a clean responsive grid
+        if images:
+            # Display up to 4 images side-by-side in columns
+            cols = st.columns(min(len(images), 4))
+            for idx, img in enumerate(images):
+                with cols[idx % 4]:
+                    try:
+                        # Decode base64 string back to raw bytes for st.image
+                        img_bytes = base64.b64decode(img["image"])
+                        st.image(
+                            img_bytes,
+                            use_container_width=True,
+                            output_format="auto",
+                            caption=img["name"],
+                        )
+                    except Exception:
+                        st.error("📸 Failed to render image")
 
-    files_html = ""
-    if files:
-        chips = ""
-        for f in files:
-            ext = Path(f["name"]).suffix.lower()
-            if ext in TEXT_EXTS:
-                try:
-                    text = base64.b64decode(f["file"]).decode("utf-8", errors="replace")
-                    escaped = html.escape(text)
-                    preview = (
-                        f'<pre style="margin:6px 0 0;padding:8px;background:rgba(0,0,0,0.3);'
-                        f"border-radius:6px;font-size:0.72rem;overflow:auto;"
-                        f'white-space:pre-wrap;max-height:180px;">{escaped}</pre>'
-                    )
-                except Exception:
-                    preview = ""
-            else:
-                preview = '<p style="font-size:0.75rem;margin:6px 0;opacity:0.6;">No preview available</p>'
+        # 2. Handle Files using native Streamlit expanders
+        if files:
+            for f in files:
+                ext = Path(f["name"]).suffix.lower()
+                # Clean native expander replaces the finicky HTML <details> tag
+                with st.expander(f"📎 {f['name']}", expanded=False):
+                    if ext in TEXT_EXTS:
+                        try:
+                            text = base64.b64decode(f["file"]).decode(
+                                "utf-8", errors="replace"
+                            )
+                            # st.code automatically handles dark contrast and syntax highlighting
+                            lang = ext.strip(".")
+                            st.code(text, language=lang)
+                        except Exception:
+                            st.caption("Error decoding file content.")
+                    else:
+                        st.caption("No preview available for this file type.")
 
-            chips += (
-                f'<details style="background:rgba(255,255,255,0.1);border-radius:8px;padding:4px 10px;margin-bottom:4px;">'
-                f'<summary style="cursor:pointer;font-size:0.8rem;list-style:none;">📎 {html.escape(f["name"])}</summary>'
-                f"{preview}"
-                f"</details>"
-            )
-        files_html = f'<div style="margin-bottom:8px;">{chips}</div>'
+        # 3. Handle Main Text Content
+        # Using standard st.write natively handles markdown links, bold text, and line breaks
+        st.write(content)
 
-    safe_content = html.escape(content).replace("\n", "<br/>")
-    st.markdown(
-        f'<div class="bubble-wrapper user"><div class="bubble user">'
-        f"{images_html}{files_html}{safe_content}"
-        f"</div></div>",
-        unsafe_allow_html=True,
-    )
+
+# def user_bubble(content: str, images: list, files: list):
+#     images_html = ""
+#     if images:
+#         imgs = "".join(
+#             f'<img src="data:{img["mime"]};base64,{img["image"]}" '
+#             f'style="height:160px;width:160px;object-fit:cover;border-radius:8px;flex-shrink:0;"/>'
+#             for img in images
+#         )
+#         images_html = f'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">{imgs}</div>'
+#
+#     files_html = ""
+#     if files:
+#         chips = ""
+#         for f in files:
+#             ext = Path(f["name"]).suffix.lower()
+#             if ext in TEXT_EXTS:
+#                 try:
+#                     text = base64.b64decode(f["file"]).decode("utf-8", errors="replace")
+#                     escaped = html.escape(text)
+#                     preview = (
+#                         f'<pre style="margin:6px 0 0;padding:8px;background:rgba(0,0,0,0.3);'
+#                         f"border-radius:6px;font-size:0.72rem;overflow:auto;"
+#                         f'white-space:pre-wrap;max-height:180px;">{escaped}</pre>'
+#                     )
+#                 except Exception:
+#                     preview = ""
+#             else:
+#                 preview = '<p style="font-size:0.75rem;margin:6px 0;opacity:0.6;">No preview available</p>'
+#
+#             chips += (
+#                 f'<details style="background:rgba(255,255,255,0.1);border-radius:8px;padding:4px 10px;margin-bottom:4px;">'
+#                 f'<summary style="cursor:pointer;font-size:0.8rem;list-style:none;">📎 {html.escape(f["name"])}</summary>'
+#                 f"{preview}"
+#                 f"</details>"
+#             )
+#         files_html = f'<div style="margin-bottom:8px;">{chips}</div>'
+#
+#     safe_content = html.escape(content).replace("\n", "<br/>")
+#     st.markdown(
+#         f'<div class="bubble-wrapper user"><div class="bubble user">'
+#         f"{images_html}{files_html}{safe_content}"
+#         f"</div></div>",
+#         unsafe_allow_html=True,
+#     )
+#
 
 
 def header():
@@ -542,6 +588,7 @@ def display_session_actions():
                     delete_sess()
                 if st.button("Similar"):
                     find_similar_sess()
+
         session_actions.float(
             "top: 60px; background-color: rgba(38, 39, 48, 0.75); backdrop-filter: blur(8px); --webkit-backdrop-filter: blur(8px); z-index: 99;"
         )
