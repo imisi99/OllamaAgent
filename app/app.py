@@ -17,6 +17,7 @@ from streamlit.runtime.uploaded_file_manager import UploadedFile
 
 # TODO:
 # Fix the loading of file back for streamlit and also the images let it be empty if not in use
+# Add a model picker for the app
 
 
 # DONE:
@@ -78,7 +79,9 @@ st.markdown(
 
 def user_bubble(content: str, images: list, files: list):
     # This creates a native, beautifully styled user chat container
-    with st.chat_message("user"):
+    with st.container(
+        border=True,
+    ):
         # 1. Handle Images in a clean responsive grid
         if images:
             # Display up to 4 images side-by-side in columns
@@ -110,7 +113,7 @@ def user_bubble(content: str, images: list, files: list):
                             )
                             # st.code automatically handles dark contrast and syntax highlighting
                             lang = ext.strip(".")
-                            st.code(text, language=lang)
+                            st.code(text, language=lang, line_numbers=True)
                         except Exception:
                             st.caption("Error decoding file content.")
                     else:
@@ -590,7 +593,7 @@ def display_session_actions():
                     find_similar_sess()
 
         session_actions.float(
-            "top: 60px; background-color: rgba(38, 39, 48, 0.75); backdrop-filter: blur(8px); --webkit-backdrop-filter: blur(8px); z-index: 99;"
+            "top: 60px; background-color: rgba(38, 39, 48, 0.75); backdrop-filter: blur(8px); --webkit-backdrop-filter: blur(8px); z-index: 9999;"
         )
 
 
