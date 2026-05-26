@@ -14,14 +14,10 @@ from langchain_core.messages import (
 )
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.tools import BaseTool
-from langchain_community.document_loaders import (
-    PyPDFLoader,
-    TextLoader,
-    UnstructuredHTMLLoader,
-    UnstructuredMarkdownLoader,
-    Docx2txtLoader,
-    UnstructuredExcelLoader,
-)
+from langchain_community.document_loaders.generic import GenericLoader
+from langchain_community.document_loaders.parsers.language import LanguageParser
+from pathlib import Path
+from langchain_community.document_loaders import PyPDFLoader, TextLoader, Docx2txtLoader, UnstructuredHTMLLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter, Language
 from langchain_ollama import ChatOllama
 from langchain.agents import create_agent
@@ -35,15 +31,7 @@ from schemas.mongo import File, Message
 
 # TODO:
 # The prompt length is a factor causing slow response from the agent (reduce it)
-
-# DONE:
-# Add tools for the streaming also
-# Work on the streaming of the response
-# The agent logging for the reasoning doesn't work with tool calls cause reasoning is done then
-# Work on adding the files also for the agent
-# Add a tool logging procedure also
-# Add parameters to the agent also like the session id and user id
-# In the logging llm response add a tools used and result and also is the time for the message the same across all the thoughts and tool calls
+# Fix the retrieval quality of the qdrant file chunks
 
 
 class Model:
@@ -130,20 +118,32 @@ class Model:
                     if role == "system":
                         messages.append(SystemMessage(content=msg["content"]))
                     elif role == "user":
-                        if len(msg["images"]) > 0:
-                            content: list[str | dict] = [
-                                {
-                                    "type": "image_url",
-                                    "image_url": {
-                                        "url": f"data:{image['mime']};base64,{image['image']}"
-                                    },
-                                }
-                                for image in msg["images"]
-                            ]
-                            content.append({"type": "text", "text": msg["content"]})
-                            messages.append(HumanMessage(content=content))
+                        is_current = msg is chat_history[-1]
+                        if is_current:
+                            if len(msg["images"]) > 0:
+                                content: list[str | dict] = [
+                                    {
+                                        "type": "image_url",
+                                        "image_url": {
+                                            "url": f"data:{image['mime']};base64,{image['image']}"
+                                        },
+                                    }
+                                    for image in msg["images"]
+                                ]
+                                content.append({"type": "text", "text": msg["content"]})
+                                messages.append(HumanMessage(content=content))
+                            else:
+                                messages.append(HumanMessage(content=msg["content"]))
                         else:
-                            messages.append(HumanMessage(content=msg["content"]))
+                            image_count = len(msg["images"])
+                            placeholder = (
+                                (
+                                    f"[{image_count} image(s) attached] \n {msg['content']}"
+                                )
+                                if image_count > 0
+                                else msg["content"]
+                            )
+                            messages.append(HumanMessage(content=placeholder))
                     elif role == "assistant":
                         messages.append(AIMessage(content=msg["content"]))
 
@@ -269,15 +269,16 @@ class Model:
                         suppressing = False
                     yield {"type": "tool_end", "content": ""}
 
+    # TODO: Add the source of the code and also the lines or something of the file.
+    #
     def load_document(self, files: list[File]) -> list[Document]:
         loaders = {
             ".pdf": PyPDFLoader,
             ".docx": Docx2txtLoader,
-            ".txt": TextLoader,
-            ".md": UnstructuredMarkdownLoader,
             ".html": UnstructuredHTMLLoader,
-            ".xlsx": UnstructuredExcelLoader,
         }
+
+        plain_text_exts = {".txt", ".yaml", ".yml", ".toml", ".json", ".csv", ".md"}
 
         language_map = {
             ".go": Language.GO,
@@ -285,13 +286,14 @@ class Model:
             ".java": Language.JAVA,
             ".js": Language.JS,
             ".rs": Language.RUST,
+            ".ts": Language.TS,
         }
 
         def get_splitter(ext: str) -> RecursiveCharacterTextSplitter:
             lang = language_map.get(ext)
             if lang:
                 return RecursiveCharacterTextSplitter.from_language(
-                    language=lang, chunk_size=2048, chunk_overlap=200
+                    language=lang, chunk_size=1024, chunk_overlap=100
                 )
             return RecursiveCharacterTextSplitter(chunk_size=512, chunk_overlap=50)
 
@@ -306,6 +308,9 @@ class Model:
                 tmp_path = tmp.name
 
             try:
+                lang = language_map.get(ext)
+                if lang:
+                    loader = 
                 docs = loader(tmp_path).load()
                 splitter = get_splitter(ext)
                 chunks.extend(splitter.split_documents(docs))

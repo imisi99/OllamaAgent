@@ -13,9 +13,14 @@ class File(TypedDict):
     name: str
 
 
+class Audio(TypedDict):
+    audio: Any
+
+
 class Message(TypedDict):
     role: str
     content: str
+    audio: Audio
     thought: str
     files: list[File]
     images: list[Image]

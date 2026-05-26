@@ -15,8 +15,8 @@ from app.user import user
 
 logging.basicConfig(level=logging.INFO)
 
-# DONE:
-# Fix the issue with the qdrant queue on shutdown
+
+# TODO: A clickable icon that can open the site (and also startup the app itself a scipt ?).
 
 
 @asynccontextmanager

@@ -1,5 +1,4 @@
 import base64
-import html
 import logging
 import json
 from pathlib import Path
@@ -16,16 +15,9 @@ from streamlit.runtime.uploaded_file_manager import UploadedFile
 
 
 # TODO:
-# Fix the loading of file back for streamlit and also the images let it be empty if not in use
 # Add a model picker for the app
+# Add the audio functionality use a STT
 
-
-# DONE:
-# It doesn't affect other windows the change
-# Moving between chats between conversations Doesn't get the chat stored (should a single API call be chained to use it ?)
-# (Or use a queue sort of to add messages to the stuff ? )
-# Adding the metrics (reasoning content, tool calls in the view also ? )
-# Getting a reasoning error after streaming ends ?
 
 float_init()
 
@@ -78,18 +70,12 @@ st.markdown(
 
 
 def user_bubble(content: str, images: list, files: list):
-    # This creates a native, beautifully styled user chat container
-    with st.container(
-        border=True,
-    ):
-        # 1. Handle Images in a clean responsive grid
+    with st.container(border=True, autoscroll=True):
         if images:
-            # Display up to 4 images side-by-side in columns
-            cols = st.columns(min(len(images), 4))
+            cols = st.columns(min(len(images), 2))
             for idx, img in enumerate(images):
-                with cols[idx % 4]:
+                with cols[idx % 2]:
                     try:
-                        # Decode base64 string back to raw bytes for st.image
                         img_bytes = base64.b64decode(img["image"])
                         st.image(
                             img_bytes,
@@ -98,77 +84,27 @@ def user_bubble(content: str, images: list, files: list):
                             caption=img["name"],
                         )
                     except Exception:
-                        st.error("📸 Failed to render image")
+                        st.caption("Failed to render image.")
 
-        # 2. Handle Files using native Streamlit expanders
         if files:
             for f in files:
                 ext = Path(f["name"]).suffix.lower()
-                # Clean native expander replaces the finicky HTML <details> tag
-                with st.expander(f"📎 {f['name']}", expanded=False):
+                with st.expander(f"{f['name']}", expanded=False, icon="spinner"):
                     if ext in TEXT_EXTS:
                         try:
                             text = base64.b64decode(f["file"]).decode(
                                 "utf-8", errors="replace"
                             )
-                            # st.code automatically handles dark contrast and syntax highlighting
                             lang = ext.strip(".")
-                            st.code(text, language=lang, line_numbers=True)
+                            st.code(text, language=lang, line_numbers=True, height=300)
                         except Exception:
                             st.caption("Error decoding file content.")
+                    elif ext.strip(".") == "pdf":
+                        st.pdf(base64.b64decode(f["file"]))
                     else:
                         st.caption("No preview available for this file type.")
 
-        # 3. Handle Main Text Content
-        # Using standard st.write natively handles markdown links, bold text, and line breaks
         st.write(content)
-
-
-# def user_bubble(content: str, images: list, files: list):
-#     images_html = ""
-#     if images:
-#         imgs = "".join(
-#             f'<img src="data:{img["mime"]};base64,{img["image"]}" '
-#             f'style="height:160px;width:160px;object-fit:cover;border-radius:8px;flex-shrink:0;"/>'
-#             for img in images
-#         )
-#         images_html = f'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">{imgs}</div>'
-#
-#     files_html = ""
-#     if files:
-#         chips = ""
-#         for f in files:
-#             ext = Path(f["name"]).suffix.lower()
-#             if ext in TEXT_EXTS:
-#                 try:
-#                     text = base64.b64decode(f["file"]).decode("utf-8", errors="replace")
-#                     escaped = html.escape(text)
-#                     preview = (
-#                         f'<pre style="margin:6px 0 0;padding:8px;background:rgba(0,0,0,0.3);'
-#                         f"border-radius:6px;font-size:0.72rem;overflow:auto;"
-#                         f'white-space:pre-wrap;max-height:180px;">{escaped}</pre>'
-#                     )
-#                 except Exception:
-#                     preview = ""
-#             else:
-#                 preview = '<p style="font-size:0.75rem;margin:6px 0;opacity:0.6;">No preview available</p>'
-#
-#             chips += (
-#                 f'<details style="background:rgba(255,255,255,0.1);border-radius:8px;padding:4px 10px;margin-bottom:4px;">'
-#                 f'<summary style="cursor:pointer;font-size:0.8rem;list-style:none;">📎 {html.escape(f["name"])}</summary>'
-#                 f"{preview}"
-#                 f"</details>"
-#             )
-#         files_html = f'<div style="margin-bottom:8px;">{chips}</div>'
-#
-#     safe_content = html.escape(content).replace("\n", "<br/>")
-#     st.markdown(
-#         f'<div class="bubble-wrapper user"><div class="bubble user">'
-#         f"{images_html}{files_html}{safe_content}"
-#         f"</div></div>",
-#         unsafe_allow_html=True,
-#     )
-#
 
 
 def header():
@@ -750,21 +686,7 @@ def filter_files(upload_file: list[UploadedFile]):
     images = []
     files = []
 
-    file_map = set(
-        [
-            ".pdf",
-            ".docx",
-            ".txt",
-            ".md",
-            ".html",
-            ".xlsx",
-            ".go",
-            ".py",
-            ".java",
-            ".js",
-            ".rs",
-        ]
-    )
+    file_map = TEXT_EXTS | {".pdf", ".docx", "xlxs"}
 
     image_map = set([".png", ".jpeg"])
 
@@ -797,6 +719,10 @@ def chat():
             "",
             key="chat",
             accept_file="multiple",
+            max_upload_size=20,
+            max_chars=1000,
+            accept_audio=True,
+            file_type=[f_type for f_type in TEXT_EXTS],
         )
         or st.session_state.stored_prompt is not None
     ):
@@ -813,6 +739,12 @@ def chat():
             st.session_state.chat_files, st.session_state.chat_images = filter_files(
                 prompt.files
             )
+            if len(st.session_state.chat_images) > 2:
+                st.toast("A maximum of 2 images is allowed per time!")
+                st.stop()
+            if len(st.session_state.chat_files) > 3:
+                st.toast("A maximum of 3 files is allowed per time!")
+                st.stop()
 
         if st.session_state.session_id == "" and not st.session_state.ghost_session:
             try:
@@ -938,11 +870,14 @@ def chat():
                     },
                     timeout=120,
                 ) as r:
+                    start_time = time.time()
                     for token in r.iter_text():
                         chunk = json.loads(token)
 
+                        thought = "*pondering on it...*"
+
                         if chunk["type"] == "tool":
-                            response_placeholder.markdown(f"*{chunk['content']}*")
+                            thought_placeholder.markdown(f"*{chunk['content']}*")
                         elif chunk["type"] == "text":
                             if response_text == "":
                                 with thought_placeholder.popover(
@@ -952,7 +887,18 @@ def chat():
                             response_text += chunk["content"]
                             response_placeholder.markdown(f"{response_text}" + "\u2502")
                         elif chunk["type"] == "reason":
-                            thought_placeholder.markdown("*pondering on it...*")
+                            curr_time = time.time()
+                            if thought_text == "":
+                                start_time = time.time()
+
+                            if curr_time - start_time > 30:
+                                thought = "*still pondering on it...*"
+                            if curr_time - start_time > 60:
+                                thought = "*gathering thoughts...*"
+                            if curr_time - start_time > 120:
+                                thought = "*please be patient...*"
+
+                            thought_placeholder.markdown(thought)
                             thought_text += chunk["content"]
                         elif chunk["type"] == "tool_end":
                             response_placeholder.markdown("*working on it...*")

@@ -4,7 +4,7 @@ from typing import Optional
 
 from schemas.mongo import Session
 
-# DONE: Remove noise from the json like time and id and stuff
+# TODO: Add a name to the uhm embedding of the chunks ?
 
 
 class EmbeddingModel:

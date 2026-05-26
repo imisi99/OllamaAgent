@@ -1,12 +1,9 @@
 import asyncio
-import base64
-import collections
 import logging
 from datetime import datetime
 from enum import Enum
 from typing import Union, cast
 from uuid import uuid4
-from httpx import delete
 from langchain_core.documents import Document
 from qdrant_client import QdrantClient
 from qdrant_client.models import (
@@ -17,9 +14,8 @@ from qdrant_client.models import (
     PointStruct,
 )
 from qdrant_client.http.models import UpdateStatus
-from redis import client
 from .emb import EmbeddingModel
-from schemas.mongo import Message, Session, Image, File
+from schemas.mongo import Message, Session
 
 
 class Job(str, Enum):

@@ -19,10 +19,6 @@ from schemas.mongo import Session
 # The web search works for only the bing engine the duckduckgo (timeout), google (request denied) (What's the score for and should it be added ?)
 # The web search could also work by adding a search url for more content ?
 
-# DONE:
-# Also allow for the model to choose to summarize the chat ?
-# The web search error should be clear about user being offline
-
 
 @tool
 def get_current_time(timezone: str = "UTC") -> str:

@@ -4,10 +4,7 @@ import logging
 from typing import Any
 from bson import ObjectId
 from pymongo import MongoClient
-from schemas.mongo import File, Image, Message, Session, User
-
-# TODO:
-# Change the timestamp and created at to datetime object and then make it a union for sorting
+from schemas.mongo import Audio, File, Image, Message, Session, User
 
 
 class Database:
@@ -43,12 +40,21 @@ class Database:
         for file in files:
             file["file"] = base64.b64encode(file["file"]).decode()
 
+    def normalize_audio(self, audio: Audio):
+        if audio["audio"]:
+            audio["audio"] = base64.b64decode(audio["audio"])
+
+    def denormalize_audio(self, audio: Audio):
+        if audio["audio"]:
+            audio["audio"] = base64.b64encode(audio["audio"]).decode()
+
     def create_session(self, session: Session) -> tuple[bool, str]:
         session["created_at"] = self.normalize_timestamp(session["created_at"])
         msg = session["messages"][0]
         msg_time = msg["timestamp"]
         msg["timestamp"] = self.normalize_timestamp(msg_time)
         self.normalize_image_files(msg["images"], msg["files"])
+        self.normalize_audio(msg["audio"])
         result = self.session_collection.insert_one(
             {
                 "uuid": session["uuid"],
@@ -68,10 +74,12 @@ class Database:
             message: list[Message] = []
             for msg in result["messages"]:
                 self.denormalize_image_files(msg["images"], msg["files"])
+                self.denormalize_audio(msg["audio"])
                 message.append(
                     {
                         "content": msg["content"],
                         "thought": msg["thought"],
+                        "audio": msg["audio"],
                         "role": msg["role"],
                         "timestamp": self.denormalize_timestamp(msg["timestamp"]),
                         "images": msg["images"],
@@ -103,10 +111,12 @@ class Database:
             message: list[Message] = []
             for msg in session["messages"]:
                 self.denormalize_image_files(msg["images"], msg["files"])
+                self.denormalize_audio(msg["audio"])
                 message.append(
                     {
                         "content": msg["content"],
                         "thought": msg["thought"],
+                        "audio": msg["audio"],
                         "role": msg["role"],
                         "images": msg["images"],
                         "files": msg["files"],
@@ -161,11 +171,13 @@ class Database:
             message: list[Message] = []
             for msg in session["messages"]:
                 self.denormalize_image_files(msg["images"], msg["files"])
+                self.denormalize_audio(msg["audio"])
                 message.append(
                     Message(
                         {
                             "content": msg["content"],
                             "thought": msg["thought"],
+                            "audio": msg["audio"],
                             "role": msg["role"],
                             "timestamp": self.denormalize_timestamp(msg["timestamp"]),
                             "images": msg["images"],
