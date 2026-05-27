@@ -217,6 +217,7 @@ class Database:
                             "thought": msg["thought"],
                             "role": msg["role"],
                             "timestamp": self.denormalize_timestamp(msg["timestamp"]),
+                            "audio": {"audio": ""},
                             "images": [],
                             "files": [],
                         }
@@ -246,6 +247,7 @@ class Database:
 
     def add_messages(self, session_id: str, message: Message) -> bool:
         self.normalize_image_files(message["images"], message["files"])
+        self.normalize_audio(message["audio"])
         message["timestamp"] = self.normalize_timestamp(message["timestamp"])
         result = self.session_collection.update_one(
             {"_id": ObjectId(session_id)}, {"$push": {"messages": message}}
