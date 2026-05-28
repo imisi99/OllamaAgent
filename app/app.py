@@ -39,6 +39,7 @@ TEXT_EXTS = {
     ".html",
 }
 
+
 st.markdown(
     """
     <style>

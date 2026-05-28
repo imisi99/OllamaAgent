@@ -14,10 +14,13 @@ from langchain_core.messages import (
 )
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.tools import BaseTool
-from langchain_community.document_loaders.generic import GenericLoader
-from langchain_community.document_loaders.parsers.language import LanguageParser
 from pathlib import Path
-from langchain_community.document_loaders import PyPDFLoader, TextLoader, Docx2txtLoader, UnstructuredHTMLLoader
+from langchain_community.document_loaders import (
+    PyPDFLoader,
+    TextLoader,
+    Docx2txtLoader,
+    UnstructuredHTMLLoader,
+)
 from langchain_text_splitters import RecursiveCharacterTextSplitter, Language
 from langchain_ollama import ChatOllama
 from langchain.agents import create_agent
@@ -98,6 +101,7 @@ class Model:
                     {
                         "role": "system",
                         "thought": "",
+                        "audio": {"audio": ""},
                         "content": f"SUMMARY OF THE CHAT SO FAR: {summarized}",
                         "timestamp": datetime.now().isoformat(),
                         "images": images,
@@ -177,6 +181,7 @@ class Model:
                 {
                     "role": "assistant",
                     "thought": "",
+                    "audio": {"audio": ""},
                     "content": response["messages"][-1].content,
                     "timestamp": datetime.now().isoformat(),
                     "images": [],
@@ -300,18 +305,23 @@ class Model:
         chunks: list[Document] = []
         for file in files:
             ext = Path(file["name"]).suffix.lower()
-            loader = loaders.get(ext) or (TextLoader if ext in language_map else None)
+
+            loader = loaders.get(ext) or (
+                TextLoader if ext in language_map or ext in plain_text_exts else None
+            )
             if not loader:
                 raise ValueError(f"Unsupported file type: {ext}")
-            with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
-                tmp.write(base64.b64decode(file["file"]))
-                tmp_path = tmp.name
 
+            tmp_path = ""
             try:
-                lang = language_map.get(ext)
-                if lang:
-                    loader = 
+                with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
+                    tmp.write(base64.b64decode(file["file"]))
+                    tmp_path = tmp.name
+
                 docs = loader(tmp_path).load()
+                for doc in docs:
+                    doc.metadata["source"] = file["name"]
+
                 splitter = get_splitter(ext)
                 chunks.extend(splitter.split_documents(docs))
             finally:

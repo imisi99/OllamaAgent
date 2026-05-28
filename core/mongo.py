@@ -1,6 +1,5 @@
 import base64
 from datetime import datetime
-import logging
 from typing import Any
 from bson import ObjectId
 from pymongo import MongoClient

@@ -35,6 +35,7 @@ def create_session(
                 {
                     "timestamp": datetime.datetime.now(),
                     "thought": "",
+                    "audio": prompt.audio,
                     "content": prompt.prompt,
                     "files": prompt.files,
                     "images": prompt.images,
