@@ -1,17 +1,23 @@
 from fastapi import APIRouter, Depends, WebSocket
-from core.audio import Audio, get_audio_model
+from fastapi.responses import JSONResponse
+from starlette import status
+from core.audio import AudioModel, get_audio_model
+from schemas.mongo import Audio
 
 
-audo = APIRouter()
+audio = APIRouter()
 
 
-@audo.post("/audio/transcribe")
-def transcribe_audio():
-    pass
+@audio.post("/audio/transcribe")
+def transcribe_audio(input: Audio, audio: AudioModel = Depends(get_audio_model)):
+    transcipt = audio.transcribe(input["audio"])
+    return JSONResponse(
+        content={"transcipt": transcipt}, status_code=status.HTTP_200_OK
+    )
 
 
-@audo.websocket("/ws")
-async def real_time(websocket: WebSocket, audio: Audio = Depends(get_audio_model)):
+@audio.websocket("/ws")
+async def real_time(websocket: WebSocket, audio: AudioModel = Depends(get_audio_model)):
     await websocket.accept()
     transcript_history: list[str] = []
 

@@ -2,18 +2,19 @@ import io
 import wave
 from typing import Optional
 from faster_whisper import WhisperModel
+from schemas.mongo import Audio
 
 # This current approach will work only with single connection multiple ws will break the buffer
 
 
-class Audio:
+class AudioModel:
     def __init__(self, model_path) -> None:
         self.model = WhisperModel(model_path, local_files_only=True)
         self.buffer = bytearray()
         self.BUFFER_THRESHOLD = 32000 * 2
 
-    def preprocess(self, audio: bytes) -> io.BytesIO:
-        return io.BytesIO(audio)
+    def preprocess(self, audio: Audio) -> io.BytesIO:
+        return io.BytesIO(audio["audio"])
 
     def wrap_wav(self, pcm: bytes) -> bytes:
         buf = io.BytesIO()
@@ -24,7 +25,7 @@ class Audio:
             wf.writeframes(pcm)
         return buf.getvalue()
 
-    def transcribe(self, audio: bytes) -> str:
+    def transcribe(self, audio: Audio) -> str:
         segments, _ = self.model.transcribe(self.preprocess(audio))
         return " ".join(seg.text for seg in segments)
 
@@ -42,14 +43,14 @@ class Audio:
         return " ".join(seg.text for seg in segments)
 
 
-AUDIO_MODEL: Optional[Audio] = None
+AUDIO_MODEL: Optional[AudioModel] = None
 
 
-def get_audio_model() -> Audio:
+def get_audio_model() -> AudioModel:
     if AUDIO_MODEL is None:
         raise Exception("The audio model is not initialized.")
     return AUDIO_MODEL
 
 
-def create_audio_model(model_path: str) -> Audio:
-    return Audio(model_path)
+def create_audio_model(model_path: str) -> AudioModel:
+    return AudioModel(model_path)

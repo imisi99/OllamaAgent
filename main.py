@@ -66,9 +66,18 @@ async def lifespan(app: FastAPI):
         )
         worker = asyncio.create_task(qdrant.QDRANT_DATABASE.worker())
 
-        model_dir = download_model(
-            "base", output_dir="./models", local_files_only=True, cache_dir="./models"
-        )
+        try:
+            model_dir = download_model(
+                "base",
+                output_dir="./models",
+                local_files_only=True,
+            )
+
+        except Exception as e:
+            logging.info(
+                f"Falling to downloading of audio model cause the model did not exist locally -> {e}"
+            )
+            model_dir = download_model("base", output_dir="./models")
 
         audio.AUDIO_MODEL = create_audio_model(model_dir)
 
