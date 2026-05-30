@@ -39,12 +39,12 @@ class Database:
         for file in files:
             file["file"] = base64.b64encode(file["file"]).decode()
 
-    def normalize_audio(self, audio: Audio):
-        if audio["audio"]:
+    def normalize_audio(self, audio: Audio | None):
+        if audio:
             audio["audio"] = base64.b64decode(audio["audio"])
 
-    def denormalize_audio(self, audio: Audio):
-        if audio["audio"]:
+    def denormalize_audio(self, audio: Audio | None):
+        if audio:
             audio["audio"] = base64.b64encode(audio["audio"]).decode()
 
     def create_session(self, session: Session) -> tuple[bool, str]:
@@ -135,11 +135,16 @@ class Database:
 
         return result
 
-    # TODO: Fetch in order of last message datetime
+    # TODO: Fetch in order of last message datetime && Also exclude the message resources
     def fetch_all_session_preview(self) -> list[Session]:
         sessions = []
 
-        with self.session_collection.find(filter={}, projection={}) as cursor:
+        with self.session_collection.find(
+            filter={},
+            projection={
+                "messages": False,
+            },
+        ) as cursor:
             for doc in cursor:
                 sessions.append(doc)
 
@@ -209,6 +214,7 @@ class Database:
         for session in sessions:
             message: list[Message] = []
             for msg in session["messages"]:
+                self.denormalize_audio(msg["audio"])
                 message.append(
                     Message(
                         {
@@ -216,7 +222,7 @@ class Database:
                             "thought": msg["thought"],
                             "role": msg["role"],
                             "timestamp": self.denormalize_timestamp(msg["timestamp"]),
-                            "audio": {"audio": ""},
+                            "audio": msg["audio"],
                             "images": [],
                             "files": [],
                         }

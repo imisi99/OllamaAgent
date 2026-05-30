@@ -8,6 +8,7 @@ from starlette import status
 
 from core.agent import get_model, Model
 from core.mongo import Database
+from core.audio import AudioModel, get_audio_model
 from core.qdrant import Job, Qdrant, Task
 from db.mongo import get_mongo_database
 from db.qdrant import get_qdrant_database
@@ -23,9 +24,21 @@ def create_session(
     db: Database = Depends(get_mongo_database),
     qdb: Qdrant = Depends(get_qdrant_database),
     model: Model = Depends(get_model),
+    audio: AudioModel = Depends(get_audio_model),
 ):
     try:
-        title = model.generate_title(prompt.prompt)
+        title = "Untitled"
+        if prompt.prompt:
+            title = model.generate_title(prompt.prompt)
+        else:
+            prompt.prompt = audio.transcribe(prompt.audio)
+            if not prompt.prompt:
+                return JSONResponse(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    content={"msg": "Failed to detect any prompt in audio."},
+                )
+            title = model.generate_title(prompt.prompt)
+
         uid = str(uuid4())
 
         sess: Session = {
@@ -103,9 +116,19 @@ def add_message(
     session_uid: str,
     db: Database = Depends(get_mongo_database),
     qdb: Qdrant = Depends(get_qdrant_database),
+    audio: AudioModel = Depends(get_audio_model),
 ):
     try:
         message["timestamp"] = datetime.datetime.now()
+        if not message["content"]:
+            if message["audio"]:
+                message["content"] = audio.transcribe(message["audio"])
+            if not message["content"]:
+                return JSONResponse(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    content={"msg": "Failed to detect any prompt in audio."},
+                )
+
         created = db.add_messages(session_id, copy.deepcopy(message))
         if not created:
             raise Exception("MongoDB operation to add message was not acknowledged")

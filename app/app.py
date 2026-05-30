@@ -17,6 +17,7 @@ from streamlit.runtime.uploaded_file_manager import UploadedFile
 # TODO:
 # Add a model picker for the app
 # Add the audio functionality use a STT
+# Add the audio implementatoin
 
 
 float_init()
@@ -40,37 +41,7 @@ TEXT_EXTS = {
 }
 
 
-st.markdown(
-    """
-    <style>
-    .bubble-wrapper {
-        display: flex;
-        margin: 12px 0;
-        gap: 8px;
-    }
-    .bubble-wrapper.user {
-        justify-content: flex-end;
-    }
-    .bubble {
-        padding: 10px 16px;
-        border-radius: 18px;
-        font-size: 0.95rem;
-        line-height: 1.4;
-        word-wrap: break-word;
-    }
-    .bubble.user {
-        max-width: 75%;
-        background-color: black;
-        color: #e8eaf0;
-        border-bottom-right-radius: 4px;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-
-def user_bubble(content: str, images: list, files: list):
+def user_bubble(content: str, images: list, files: list, audio: dict):
     with st.container(border=True, autoscroll=True):
         if images:
             cols = st.columns(min(len(images), 2))
@@ -84,7 +55,8 @@ def user_bubble(content: str, images: list, files: list):
                             output_format="auto",
                             caption=img["name"],
                         )
-                    except Exception:
+                    except Exception as e:
+                        logging.info(f"Failed to render image err -> {e}")
                         st.caption("Failed to render image.")
 
         if files:
@@ -98,13 +70,21 @@ def user_bubble(content: str, images: list, files: list):
                             )
                             lang = ext.strip(".")
                             st.code(text, language=lang, line_numbers=True, height=300)
-                        except Exception:
+                        except Exception as e:
+                            logging.info(f"Failed to render file err -> {e}")
                             st.caption("Error decoding file content.")
                     elif ext.strip(".") == "pdf":
                         st.pdf(base64.b64decode(f["file"]))
                     else:
                         st.caption("No preview available for this file type.")
 
+        if audio:
+            try:
+                audio_bytes = base64.b64decode(audio["audio"])
+                st.audio(audio_bytes, format=audio["mime"])
+            except Exception as e:
+                logging.info(f"Failed to play audio err -> {e}")
+                st.caption("Failed to playback audio.")
         st.write(content)
 
 
@@ -683,9 +663,10 @@ def session_sidebar():
                             st.stop()
 
 
-def filter_files(upload_file: list[UploadedFile]):
+def filter_files_audio(upload_file: list[UploadedFile], audio: UploadedFile | None):
     images = []
     files = []
+    audio_info = {}
 
     file_map = TEXT_EXTS | {".pdf", ".docx", "xlxs"}
 
@@ -711,7 +692,11 @@ def filter_files(upload_file: list[UploadedFile]):
         else:
             st.toast(f"Failed to upload file -> {file.name} type not supported")
 
-    return files, images
+    if audio:
+        audio_info["audio"] = base64.b64encode(audio.read()).decode()
+        audio_info["mime"] = audio.type
+
+    return files, images, audio_info
 
 
 def chat():
@@ -737,12 +722,16 @@ def chat():
             st.session_state.skip_message = False
 
         if not st.session_state.skip_message:
-            st.session_state.chat_files, st.session_state.chat_images = filter_files(
-                prompt.files
-            )
+            (
+                st.session_state.chat_files,
+                st.session_state.chat_images,
+                st.session_state.audio,
+            ) = filter_files_audio(prompt.files, prompt.audio)
+
             if len(st.session_state.chat_images) > 2:
                 st.toast("A maximum of 2 images is allowed per time!")
                 st.stop()
+
             if len(st.session_state.chat_files) > 3:
                 st.toast("A maximum of 3 files is allowed per time!")
                 st.stop()
@@ -758,6 +747,7 @@ def chat():
                         "prompt": prompt.text,
                         "files": st.session_state.chat_files,
                         "images": st.session_state.chat_images,
+                        "audio": st.session_state.audio,
                     },
                 )
 
@@ -800,6 +790,7 @@ def chat():
                         json={
                             "role": "user",
                             "content": prompt.text,
+                            "audio": st.session_state.audio,
                             "thought": "",
                             "timestamp": "",
                             "files": st.session_state.chat_files,
@@ -825,14 +816,19 @@ def chat():
                 start_chat.empty()
 
         user_bubble(
-            prompt.text, st.session_state.chat_images, st.session_state.chat_files
+            prompt.text,
+            st.session_state.chat_images,
+            st.session_state.chat_files,
+            st.session_state.audio,
         )
+
         st.session_state.messages.append(
             {
                 "role": "user",
                 "content": prompt.text,
                 "images": st.session_state.chat_images,
                 "files": st.session_state.chat_files,
+                "audio": st.session_state.audio,
             }
         )
 
@@ -862,6 +858,7 @@ def chat():
                         "message": {
                             "role": "user",
                             "content": prompt.text,
+                            "audio": st.session_state.audio,
                             "thought": "",
                             "timestamp": "",
                             "files": st.session_state.chat_files,
@@ -935,7 +932,7 @@ def remove_active_session_from_sessions():
 def display_session_message():
     for msg in st.session_state.messages:
         if msg["role"] == "user":
-            user_bubble(msg["content"], msg["images"], msg["files"])
+            user_bubble(msg["content"], msg["images"], msg["files"], msg["audio"])
         else:
             with st.popover("*thought...*", type="tertiary"):
                 st.write(msg["thought"])

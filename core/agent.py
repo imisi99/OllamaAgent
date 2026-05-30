@@ -101,7 +101,7 @@ class Model:
                     {
                         "role": "system",
                         "thought": "",
-                        "audio": {"audio": ""},
+                        "audio": None,
                         "content": f"SUMMARY OF THE CHAT SO FAR: {summarized}",
                         "timestamp": datetime.now().isoformat(),
                         "images": images,
@@ -181,7 +181,7 @@ class Model:
                 {
                     "role": "assistant",
                     "thought": "",
-                    "audio": {"audio": ""},
+                    "audio": None,
                     "content": response["messages"][-1].content,
                     "timestamp": datetime.now().isoformat(),
                     "images": [],

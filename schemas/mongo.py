@@ -15,12 +15,13 @@ class File(TypedDict):
 
 class Audio(TypedDict):
     audio: Any
+    mime: str
 
 
 class Message(TypedDict):
     role: str
     content: str
-    audio: Audio
+    audio: Audio | None
     thought: str
     files: list[File]
     images: list[Image]

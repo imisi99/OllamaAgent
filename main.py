@@ -19,7 +19,9 @@ from app.user import user
 logging.basicConfig(level=logging.INFO)
 
 
-# TODO: A clickable icon that can open the site (and also startup the app itself a scipt ?).
+# TODO:
+# A clickable icon that can open the site (and also startup the app itself a scipt ?).
+# Create and use a different model for the qdrant and redis
 
 
 @asynccontextmanager
