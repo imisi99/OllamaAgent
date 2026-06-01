@@ -5,7 +5,7 @@ import requests
 from langchain_ollama import ChatOllama, OllamaEmbeddings
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
-from faster_whisper import download_model
+from faster_whisper import WhisperModel, download_model
 from core import audio
 from core.audio import create_audio_model
 from core.tools import tools

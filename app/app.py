@@ -695,6 +695,7 @@ def filter_files_audio(upload_file: list[UploadedFile], audio: UploadedFile | No
     if audio:
         audio_info["audio"] = base64.b64encode(audio.read()).decode()
         audio_info["mime"] = audio.type
+        print(audio)
 
     return files, images, audio_info
 
@@ -753,7 +754,6 @@ def chat():
 
                 if new_session.status_code != 201:
                     resp = new_session.json()
-                    logging.error(resp)
                     st.toast(
                         resp["msg"] if "msg" in resp else resp["detail"],
                         duration=7,

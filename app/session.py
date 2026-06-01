@@ -1,4 +1,5 @@
 import copy
+import base64
 import logging
 import datetime
 from uuid import uuid4
@@ -31,6 +32,8 @@ def create_session(
         if prompt.prompt:
             title = model.generate_title(prompt.prompt)
         else:
+            db.denormalize_audio(prompt.audio)
+            prompt.audio = base64.b64encode(prompt.audio).decode()
             prompt.prompt = audio.transcribe(prompt.audio)
             if not prompt.prompt:
                 return JSONResponse(
@@ -122,6 +125,7 @@ def add_message(
         message["timestamp"] = datetime.datetime.now()
         if not message["content"]:
             if message["audio"]:
+                db.denormalize_audio(message["audio"])
                 message["content"] = audio.transcribe(message["audio"])
             if not message["content"]:
                 return JSONResponse(

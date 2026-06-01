@@ -9,7 +9,7 @@ from schemas.mongo import Audio
 
 class AudioModel:
     def __init__(self, model_path) -> None:
-        self.model = WhisperModel(model_path, local_files_only=True)
+        self.model = WhisperModel(model_path, local_files_only=True, device="cuda")
         self.buffer = bytearray()
         self.BUFFER_THRESHOLD = 32000 * 2
 
