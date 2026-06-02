@@ -1,5 +1,6 @@
 import io
 import wave
+
 from typing import Optional
 from faster_whisper import WhisperModel
 from schemas.mongo import Audio
@@ -9,11 +10,19 @@ from schemas.mongo import Audio
 
 class AudioModel:
     def __init__(self, model_path) -> None:
-        self.model = WhisperModel(model_path, local_files_only=True, device="cuda")
+        self.model = WhisperModel(model_path, local_files_only=True)
         self.buffer = bytearray()
         self.BUFFER_THRESHOLD = 32000 * 2
 
+    def _normalise_with_soundfile(self, raw: bytes) -> io.BytesIO:
+        buf_in = io.BytesIO(raw)
+        data, sr = s
+
     def preprocess(self, audio: Audio) -> io.BytesIO:
+        match audio["mime"]:
+            case "audio/wav":
+                pass
+
         return io.BytesIO(audio["audio"])
 
     def wrap_wav(self, pcm: bytes) -> bytes:
