@@ -41,11 +41,13 @@ class Database:
 
     def normalize_audio(self, audio: Audio | None):
         if audio:
-            audio["audio"] = base64.b64decode(audio["audio"])
+            if isinstance(audio["audio"], str):
+                audio["audio"] = base64.b64decode(audio["audio"])
 
     def denormalize_audio(self, audio: Audio | None):
         if audio:
-            audio["audio"] = base64.b64encode(audio["audio"]).decode()
+            if isinstance(audio["audio"], bytes):
+                audio["audio"] = base64.b64encode(audio["audio"]).decode()
 
     def create_session(self, session: Session) -> tuple[bool, str]:
         session["created_at"] = self.normalize_timestamp(session["created_at"])

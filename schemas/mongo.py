@@ -16,6 +16,7 @@ class File(TypedDict):
 class Audio(TypedDict):
     audio: Any
     mime: str
+    transcript: str
 
 
 class Message(TypedDict):

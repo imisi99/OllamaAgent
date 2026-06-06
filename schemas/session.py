@@ -1,12 +1,11 @@
 from pydantic import BaseModel
-from typing import Any
 
-from schemas.mongo import File, Image
+from schemas.mongo import Audio, File, Image
 
 
 class CreateSession(BaseModel):
     prompt: str
-    audio: Any
+    audio: Audio | None
     files: list[File]
     images: list[Image]
 

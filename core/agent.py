@@ -30,7 +30,7 @@ from pathlib import Path
 from core.qdrant import Qdrant
 from db.redis import get_redis_database
 from schemas.agent import SessAgentState, SessionState
-from schemas.mongo import File, Message
+from schemas.mongo import Audio, File, Message
 
 # TODO:
 # The prompt length is a factor causing slow response from the agent (reduce it)
@@ -381,7 +381,7 @@ class Model:
             f"total_duration: {metadata.get('total_duration', 0) / 1e9:.3f}s"
         )
 
-    def generate_title(self, content: str) -> str:
+    def generate_title(self, content: str, audio: Audio | None) -> str:
         prompt = (
             "Generate a title for a chat session not more than 5 words using the user first input. Your response should be the title ONLY (one title) without the string quote or any tags an example is (Explaining Docker Compose) "
             + content

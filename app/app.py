@@ -41,7 +41,7 @@ TEXT_EXTS = {
 }
 
 
-def user_bubble(content: str, images: list, files: list, audio: dict):
+def user_bubble(content: str, images: list, files: list, audio: dict | None):
     with st.container(border=True, autoscroll=True):
         if images:
             cols = st.columns(min(len(images), 2))
@@ -666,7 +666,7 @@ def session_sidebar():
 def filter_files_audio(upload_file: list[UploadedFile], audio: UploadedFile | None):
     images = []
     files = []
-    audio_info = {}
+    audio_info = None
 
     file_map = TEXT_EXTS | {".pdf", ".docx", "xlxs"}
 
@@ -693,9 +693,10 @@ def filter_files_audio(upload_file: list[UploadedFile], audio: UploadedFile | No
             st.toast(f"Failed to upload file -> {file.name} type not supported")
 
     if audio:
-        audio_info["audio"] = base64.b64encode(audio.read()).decode()
-        audio_info["mime"] = audio.type
-        print(audio)
+        audio_info = {
+            "audio": base64.b64encode(audio.read()).decode(),
+            "mime": audio.type,
+        }
 
     return files, images, audio_info
 

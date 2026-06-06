@@ -1,4 +1,6 @@
 import io
+import logging
+from re import T
 import wave
 
 from typing import Optional
@@ -14,9 +16,9 @@ class AudioModel:
         self.buffer = bytearray()
         self.BUFFER_THRESHOLD = 32000 * 2
 
-    def _normalise_with_soundfile(self, raw: bytes) -> io.BytesIO:
-        buf_in = io.BytesIO(raw)
-        data, sr = s
+    # def _normalise_with_soundfile(self, raw: bytes) -> io.BytesIO:
+    #     buf_in = io.BytesIO(raw)
+    #     data, sr = s
 
     def preprocess(self, audio: Audio) -> io.BytesIO:
         match audio["mime"]:
@@ -34,9 +36,14 @@ class AudioModel:
             wf.writeframes(pcm)
         return buf.getvalue()
 
-    def transcribe(self, audio: Audio) -> str:
-        segments, _ = self.model.transcribe(self.preprocess(audio))
-        return " ".join(seg.text for seg in segments)
+    def transcribe(self, audio: Audio) -> bool:
+        try:
+            segments, _ = self.model.transcribe(self.preprocess(audio))
+            audio["transcript"] = " ".join(seg.text for seg in segments)
+            return True
+        except Exception as e:
+            logging.error(f"[AUDIO_MODEL] Failed to transcribe audio -> {e}")
+            return False
 
     async def real_time_transcribe(self, chunk: bytes) -> str | None:
         self.buffer.extend(chunk)

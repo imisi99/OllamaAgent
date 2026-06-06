@@ -29,18 +29,31 @@ def create_session(
 ):
     try:
         title = "Untitled"
-        if prompt.prompt:
-            title = model.generate_title(prompt.prompt)
-        else:
-            db.denormalize_audio(prompt.audio)
-            prompt.audio = base64.b64encode(prompt.audio).decode()
-            prompt.prompt = audio.transcribe(prompt.audio)
-            if not prompt.prompt:
+        if prompt.audio:
+            try:
+                prompt.audio["audio"] = base64.b64decode(prompt.audio["audio"])
+                transcibed = audio.transcribe(prompt.audio)
+
+                if not transcibed:
+                    return JSONResponse(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        content={"msg": "Failed to transcribe audio."},
+                    )
+
+                if not prompt.prompt and not prompt.audio["transcript"]:
+                    return JSONResponse(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        content={"msg": "No prompt and audio is silent."},
+                    )
+
+            except Exception as e:
+                logging.info(f"Failed to transcribe audio -> {e}")
                 return JSONResponse(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    content={"msg": "Failed to detect any prompt in audio."},
+                    content={"msg": "Failed to transcribe audio"},
                 )
-            title = model.generate_title(prompt.prompt)
+
+        title = model.generate_title(prompt.prompt, prompt.audio)
 
         uid = str(uuid4())
 
@@ -73,7 +86,12 @@ def create_session(
 
         return JSONResponse(
             status_code=status.HTTP_201_CREATED,
-            content={"id": id, "uid": uid, "title": title},
+            content={
+                "id": id,
+                "uid": uid,
+                "title": title,
+                "transcript": "" if not prompt.audio else prompt.audio["transcript"],
+            },
         )
 
     except Exception as e:
@@ -123,14 +141,28 @@ def add_message(
 ):
     try:
         message["timestamp"] = datetime.datetime.now()
-        if not message["content"]:
-            if message["audio"]:
-                db.denormalize_audio(message["audio"])
-                message["content"] = audio.transcribe(message["audio"])
-            if not message["content"]:
+        if message["audio"]:
+            try:
+                message["audio"]["audio"] = base64.b64decode(message["audio"]["audio"])
+                transcibed = audio.transcribe(message["audio"])
+
+                if not transcibed:
+                    return JSONResponse(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        content={"msg": "Failed to transcribe audio."},
+                    )
+
+                if not message["content"] and not message["audio"]["transcript"]:
+                    return JSONResponse(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        content={"msg": "No prompt and audio is silent."},
+                    )
+
+            except Exception as e:
+                logging.info(f"Failed to transcribe audio -> {e}")
                 return JSONResponse(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    content={"msg": "Failed to detect any prompt in audio."},
+                    content={"msg": "Failed to transcribe audio"},
                 )
 
         created = db.add_messages(session_id, copy.deepcopy(message))
@@ -140,7 +172,13 @@ def add_message(
         qdb.add_job(Task(job=Job.UPDATE_POINT, uid=session_uid, message=message))
 
         return JSONResponse(
-            status_code=status.HTTP_202_ACCEPTED, content={"msg": "Message added."}
+            status_code=status.HTTP_202_ACCEPTED,
+            content={
+                "msg": "Message added.",
+                "transcript": ""
+                if not message["audio"]
+                else message["audio"]["transcript"],
+            },
         )
 
     except Exception as e:
