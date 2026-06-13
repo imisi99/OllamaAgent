@@ -107,6 +107,18 @@ services:
       retries: 5
     networks:
       - agent-shared-network
+
+  redisinsight:
+    image: redis/redisinsight:latest
+    container_name: agent_redisinsight
+    restart: always
+    ports:
+      - "5540:5540"
+    networks:
+      - agent-shared-network
+    depends_on:
+      - redis
+
   server:
     build:
       context: .

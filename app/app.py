@@ -85,7 +85,7 @@ def user_bubble(content: str, images: list, files: list, audio: dict | None):
             except Exception as e:
                 logging.info(f"Failed to play audio err -> {e}")
                 st.caption("Failed to playback audio.")
-        st.write(content)
+        st.text(content)
 
 
 def header():
@@ -696,7 +696,21 @@ def filter_files_audio(upload_file: list[UploadedFile], audio: UploadedFile | No
         audio_info = {
             "audio": base64.b64encode(audio.read()).decode(),
             "mime": audio.type,
+            "transcript": "",
         }
+
+        try:
+            audio_req = requests.post(
+                url="/audio/transcribe",
+                json=audio_info,
+            )
+
+            resp = audio_req.json()
+            if audio_req.status_code != 200:
+                st.toast(resp["msg"] if "msg" in resp else resp["detail"])
+
+        except Exception as e:
+            pass
 
     return files, images, audio_info
 
@@ -710,7 +724,7 @@ def chat():
             max_upload_size=20,
             max_chars=1000,
             accept_audio=True,
-            file_type=[f_type for f_type in TEXT_EXTS],
+            file_type=[f_type for f_type in TEXT_EXTS].extend([".png", ".jpeg"]),
         )
         or st.session_state.stored_prompt is not None
     ):
