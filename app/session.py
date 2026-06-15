@@ -1,5 +1,4 @@
 import copy
-import base64
 import logging
 import datetime
 from uuid import uuid4
@@ -9,7 +8,6 @@ from starlette import status
 
 from core.agent import get_model, Model
 from core.mongo import Database
-from core.audio import AudioModel, get_audio_model
 from core.qdrant import Job, Qdrant, Task
 from db.mongo import get_mongo_database
 from db.qdrant import get_qdrant_database
@@ -25,33 +23,21 @@ def create_session(
     db: Database = Depends(get_mongo_database),
     qdb: Qdrant = Depends(get_qdrant_database),
     model: Model = Depends(get_model),
-    audio: AudioModel = Depends(get_audio_model),
 ):
     try:
         title = "Untitled"
-        if prompt.audio:
-            try:
-                prompt.audio["audio"] = base64.b64decode(prompt.audio["audio"])
-                transcibed = audio.transcribe(prompt.audio)
 
-                if not transcibed:
-                    return JSONResponse(
-                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                        content={"msg": "Failed to transcribe audio."},
-                    )
+        if not prompt.prompt and not prompt.audio:
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={"msg": "No content to create chat with."},
+            )
 
-                if not prompt.prompt and not prompt.audio["transcript"]:
-                    return JSONResponse(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        content={"msg": "No prompt and audio is silent."},
-                    )
-
-            except Exception as e:
-                logging.info(f"Failed to transcribe audio -> {e}")
-                return JSONResponse(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    content={"msg": "Failed to transcribe audio"},
-                )
+        if prompt.audio and not prompt.audio["transcript"] and not prompt.prompt:
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={"msg": "No prompt and the audio is silent."},
+            )
 
         title = model.generate_title(prompt.prompt, prompt.audio)
 
@@ -86,12 +72,7 @@ def create_session(
 
         return JSONResponse(
             status_code=status.HTTP_201_CREATED,
-            content={
-                "id": id,
-                "uid": uid,
-                "title": title,
-                "transcript": "" if not prompt.audio else prompt.audio["transcript"],
-            },
+            content={"id": id, "uid": uid, "title": title},
         )
 
     except Exception as e:
@@ -137,33 +118,23 @@ def add_message(
     session_uid: str,
     db: Database = Depends(get_mongo_database),
     qdb: Qdrant = Depends(get_qdrant_database),
-    audio: AudioModel = Depends(get_audio_model),
 ):
     try:
-        message["timestamp"] = datetime.datetime.now()
-        if message["audio"]:
-            try:
-                message["audio"]["audio"] = base64.b64decode(message["audio"]["audio"])
-                transcibed = audio.transcribe(message["audio"])
+        if not message["content"] and not message["audio"]:
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={"msg": "No content to create chat with."},
+            )
 
-                if not transcibed:
-                    return JSONResponse(
-                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                        content={"msg": "Failed to transcribe audio."},
-                    )
-
-                if not message["content"] and not message["audio"]["transcript"]:
-                    return JSONResponse(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        content={"msg": "No prompt and audio is silent."},
-                    )
-
-            except Exception as e:
-                logging.info(f"Failed to transcribe audio -> {e}")
-                return JSONResponse(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    content={"msg": "Failed to transcribe audio"},
-                )
+        if (
+            message["audio"]
+            and not message["audio"]["transcript"]
+            and not message["content"]
+        ):
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={"msg": "No prompt and the audio is silent."},
+            )
 
         created = db.add_messages(session_id, copy.deepcopy(message))
         if not created:
@@ -173,12 +144,7 @@ def add_message(
 
         return JSONResponse(
             status_code=status.HTTP_202_ACCEPTED,
-            content={
-                "msg": "Message added.",
-                "transcript": ""
-                if not message["audio"]
-                else message["audio"]["transcript"],
-            },
+            content={"msg": "Message added."},
         )
 
     except Exception as e:

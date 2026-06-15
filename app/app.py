@@ -708,9 +708,13 @@ def filter_files_audio(upload_file: list[UploadedFile], audio: UploadedFile | No
             resp = audio_req.json()
             if audio_req.status_code != 200:
                 st.toast(resp["msg"] if "msg" in resp else resp["detail"])
+                st.stop()
+
+            audio_info["transcript"] = resp["transcript"]
 
         except Exception as e:
-            pass
+            st.toast(f"Failed to transcribe audio -> {e}")
+            st.stop()
 
     return files, images, audio_info
 

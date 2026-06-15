@@ -10,9 +10,15 @@ audio = APIRouter()
 
 @audio.post("/audio/transcribe")
 def transcribe_audio(input: Audio, audio: AudioModel = Depends(get_audio_model)):
-    transcipt = audio.transcribe(input["audio"])
+    try:
+        transcipt = audio.transcribe(input["audio"])
+    except Exception as e:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"msg": f"Failed to transcribe audio -> {e}"},
+        )
     return JSONResponse(
-        content={"transcipt": transcipt}, status_code=status.HTTP_200_OK
+        status_code=status.HTTP_200_OK, content={"transcipt": transcipt}
     )
 
 
