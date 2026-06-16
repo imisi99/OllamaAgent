@@ -1,6 +1,6 @@
+import base64
 import io
 import logging
-from re import T
 import wave
 
 from typing import Optional
@@ -21,6 +21,7 @@ class AudioModel:
     #     data, sr = s
 
     def preprocess(self, audio: Audio) -> io.BytesIO:
+        audio["audio"] = base64.b64decode(audio["audio"])
         match audio["mime"]:
             case "audio/wav":
                 pass

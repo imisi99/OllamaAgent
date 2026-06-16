@@ -5,7 +5,7 @@ import requests
 from langchain_ollama import ChatOllama, OllamaEmbeddings
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
-from faster_whisper import WhisperModel, download_model
+from faster_whisper import download_model
 from core import audio
 from core.audio import create_audio_model
 from core.tools import tools
@@ -15,6 +15,7 @@ from core import agent, emb
 from app.server import serve
 from app.session import session
 from app.user import user
+from app.audio import audio_router
 
 logging.basicConfig(level=logging.INFO)
 
@@ -91,11 +92,11 @@ async def lifespan(app: FastAPI):
     yield
     base_url = os.getenv("OLLAMA_BASE_URL", "")
     requests.post(
-        url=f"{base_url}/api/chat", json={"model": "qwen3.5:4b", "keep_alive": 0}
+        url=f"{base_url}/api/chat", json={"model": "qwen3.5:4b", "keep_alive": 20}
     )
     requests.post(
         f"{base_url}/api/embeddings",
-        json={"model": "nomic-embed-text", "keep_alive": 0},
+        json={"model": "nomic-embed-text", "keep_alive": 20},
     )
     await (
         qdrant.QDRANT_DATABASE.finish_queue()
@@ -122,3 +123,4 @@ def health():
 app.include_router(session)
 app.include_router(serve)
 app.include_router(user)
+app.include_router(audio_router)

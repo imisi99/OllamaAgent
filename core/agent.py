@@ -151,18 +151,34 @@ class Model:
                     elif role == "assistant":
                         messages.append(AIMessage(content=msg["content"]))
 
+            messages[-1].content = ""
+
             prompt = f"""
             Use the following documents to answer the user question.
             <document>
             {state["chunks"]}
             </document>
+            """
 
+            prompt_with_audio = f"""
+            The user said this with audio and this is the transcription.
+            <transcript>
+            {state["message"]["audio"]["transcript"] if state["message"]["audio"] else ""}
+            </transcript>
+            """
+
+            actual_prompt = f"""
             User Question:
             {state["message"]["content"]}
             """
 
             if len(state["chunks"]) > 0:
-                messages[-1].content = prompt
+                messages[-1].content += prompt
+
+            if state["message"]["audio"]:
+                messages[-1].content += prompt_with_audio
+
+            messages[-1].content += actual_prompt
 
             response = await agent.ainvoke(
                 {

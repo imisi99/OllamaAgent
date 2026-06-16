@@ -131,7 +131,7 @@ def user_profile():
                         with st.spinner():
                             try:
                                 rename_user = requests.put(
-                                    url="http://server:8000/user/"
+                                    url=f"{API_URL}/user/"
                                     + st.session_state.user_id
                                     + "/update/"
                                     + new_name.strip()
@@ -166,8 +166,7 @@ def user_profile():
                 with st.spinner():
                     try:
                         memory_req = requests.get(
-                            url="http://localhost:8000/user/me/"
-                            + st.session_state.user_id
+                            url=f"{API_URL}/user/me/" + st.session_state.user_id
                         )
 
                         if memory_req.status_code == 404:
@@ -207,7 +206,7 @@ def user_profile():
                                 with st.spinner():
                                     try:
                                         update_req = requests.put(
-                                            url="http://localhost:8000/user/"
+                                            url=f"{API_URL}/user/"
                                             + st.session_state.user_id
                                             + "/update/memory",
                                             json={
@@ -242,7 +241,7 @@ def user_profile():
                             with st.spinner():
                                 try:
                                     delete_req = requests.delete(
-                                        url="http://localhost:8000/user/"
+                                        url=f"{API_URL}/user/"
                                         + st.session_state.user_id
                                         + "/delete/memory/"
                                         + key
@@ -281,7 +280,7 @@ def user_profile():
                         with st.spinner():
                             try:
                                 add_mem_req = requests.put(
-                                    url="http://localhost:8000/user/"
+                                    url=f"{API_URL}/user/"
                                     + st.session_state.user_id
                                     + "/update/memory",
                                     json={"key": key, "value": value},
@@ -337,7 +336,7 @@ def display_session_actions():
                     with st.spinner():
                         try:
                             rename_req = requests.put(
-                                url="http://localhost:8000/session/rename/"
+                                url=f"{API_URL}/session/rename/"
                                 + st.session_state.session_id
                                 + "/"
                                 + st.session_state.session_uid
@@ -372,7 +371,7 @@ def display_session_actions():
                 with st.spinner():
                     try:
                         delete_req = requests.delete(
-                            url="http://localhost:8000/session/delete/"
+                            url=f"{API_URL}/session/delete/"
                             + st.session_state.session_id
                             + "/"
                             + st.session_state.session_uid,
@@ -518,7 +517,7 @@ def get_or_create_user():
     if "user_id" not in st.session_state:
         with st.spinner():
             try:
-                user_req = requests.get(url="http://localhost:8000/user")
+                user_req = requests.get(url=f"{API_URL}/user")
 
                 if user_req.status_code == 200:
                     st.session_state.user_id = user_req.json()["id"]
@@ -532,8 +531,7 @@ def get_or_create_user():
                         if st.button("Create") and username:
                             try:
                                 new_user_req = requests.post(
-                                    url="http://localhost:8000/user/create/"
-                                    + username.strip()
+                                    url=f"{API_URL}/user/create/" + username.strip()
                                 )
 
                                 if new_user_req.status_code == 201:
@@ -596,9 +594,7 @@ def session_sidebar():
         ):
             with st.spinner():
                 try:
-                    sessions_req = requests.get(
-                        url="http://localhost:8000/session/all/preview"
-                    )
+                    sessions_req = requests.get(url=f"{API_URL}/session/all/preview")
 
                     if sessions_req.status_code == 404:
                         st.info("you have no existing session start a new session")
@@ -629,7 +625,7 @@ def session_sidebar():
                     with st.spinner():
                         try:
                             message_req = requests.get(
-                                "http://localhost:8000/session/" + session["_id"]
+                                f"{API_URL}/session/" + session["_id"]
                             )
 
                             if message_req.status_code == 200:
@@ -701,7 +697,7 @@ def filter_files_audio(upload_file: list[UploadedFile], audio: UploadedFile | No
 
         try:
             audio_req = requests.post(
-                url="/audio/transcribe",
+                url=f"{API_URL}/audio/transcribe",
                 json=audio_info,
             )
 
@@ -762,7 +758,7 @@ def chat():
                 create_session.markdown("*creating session...*")
 
                 new_session = requests.post(
-                    url="http://localhost:8000/session/create",
+                    url=f"{API_URL}/session/create",
                     json={
                         "prompt": prompt.text,
                         "files": st.session_state.chat_files,
@@ -802,7 +798,7 @@ def chat():
                 start_chat.markdown("*starting chat...*")
                 try:
                     add_msg_response = requests.put(
-                        url="http://localhost:8000/session/msg/"
+                        url=f"{API_URL}/session/msg/"
                         + st.session_state.session_id
                         + "/"
                         + st.session_state.session_uid,

@@ -136,6 +136,8 @@ def add_message(
                 content={"msg": "No prompt and the audio is silent."},
             )
 
+        message["timestamp"] = datetime.datetime.now()
+
         created = db.add_messages(session_id, copy.deepcopy(message))
         if not created:
             raise Exception("MongoDB operation to add message was not acknowledged")

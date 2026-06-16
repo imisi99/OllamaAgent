@@ -5,24 +5,25 @@ from core.audio import AudioModel, get_audio_model
 from schemas.mongo import Audio
 
 
-audio = APIRouter()
+audio_router = APIRouter()
 
 
-@audio.post("/audio/transcribe")
+@audio_router.post("/audio/transcribe")
 def transcribe_audio(input: Audio, audio: AudioModel = Depends(get_audio_model)):
-    try:
-        transcipt = audio.transcribe(input["audio"])
-    except Exception as e:
+    transcibed = audio.transcribe(input)
+
+    if not transcibed:
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"msg": f"Failed to transcribe audio -> {e}"},
+            content={"msg": "Failed to transcribe audio."},
         )
+
     return JSONResponse(
-        status_code=status.HTTP_200_OK, content={"transcipt": transcipt}
+        status_code=status.HTTP_200_OK, content={"transcript": input["transcript"]}
     )
 
 
-@audio.websocket("/ws")
+@audio_router.websocket("/ws")
 async def real_time(websocket: WebSocket, audio: AudioModel = Depends(get_audio_model)):
     await websocket.accept()
     transcript_history: list[str] = []
