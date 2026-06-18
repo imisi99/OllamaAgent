@@ -398,11 +398,20 @@ class Model:
         )
 
     def generate_title(self, content: str, audio: Audio | None) -> str:
-        prompt = (
-            "Generate a title for a chat session not more than 5 words using the user first input. Your response should be the title ONLY (one title) without the string quote or any tags an example is (Explaining Docker Compose) "
-            + content
-        )
         title = "Untitled Session"
+        prompt = """
+        Generate a title for a chat session using the user input as context.
+        Your response should be the title ONLY (one title) without the string quote or any tags 
+        Examples are (Explaining Docker Compose, Implementing gRPC in Go and Python)
+        """
+
+        if not content and not audio:
+            return title
+
+        if content:
+            prompt += f"\nThe user input: {content}"
+        if audio:
+            prompt += f"\nThe user audio transcribed: {audio['transcript']}"
 
         try:
             response = self.no_reason.invoke(prompt)

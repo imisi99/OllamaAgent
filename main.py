@@ -45,20 +45,22 @@ async def lifespan(app: FastAPI):
         reason = ChatOllama(
             model="qwen3.5:4b",
             base_url=OLLAMA_BASE_URL,
-            keep_alive=-1,
+            keep_alive="15m",
             reasoning=True,
             verbose=True,
         )
         no_reason = ChatOllama(
             model="qwen3.5:4b",
             base_url=OLLAMA_BASE_URL,
-            keep_alive=-1,
+            keep_alive="15m",
             reasoning=False,
             verbose=True,
         )
 
         embed = OllamaEmbeddings(
-            model="nomic-embed-text", base_url=OLLAMA_BASE_URL, keep_alive=-1
+            model="nomic-embed-text",
+            base_url=OLLAMA_BASE_URL,
+            keep_alive=15,
         )
 
         emb.EMB_MODEL = emb.create_emb_model(embed)
@@ -92,11 +94,11 @@ async def lifespan(app: FastAPI):
     yield
     base_url = os.getenv("OLLAMA_BASE_URL", "")
     requests.post(
-        url=f"{base_url}/api/chat", json={"model": "qwen3.5:4b", "keep_alive": 20}
+        url=f"{base_url}/api/chat", json={"model": "qwen3.5:4b", "keep_alive": 0}
     )
     requests.post(
         f"{base_url}/api/embeddings",
-        json={"model": "nomic-embed-text", "keep_alive": 20},
+        json={"model": "nomic-embed-text", "keep_alive": 0},
     )
     await (
         qdrant.QDRANT_DATABASE.finish_queue()

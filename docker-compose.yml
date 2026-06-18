@@ -1,31 +1,4 @@
 services:
-  searxng:
-    image: searxng/searxng:2026.3.12-3d3a78f3a
-    container_name: agent_searxng
-    restart: always
-    ports:
-      - "9090:8080"
-    environment:
-      - SEARXNG_BASE_URL=${SEARXNG_BASE_URL}
-      - SEARXNG_SECRET_KEY=${SEARXNG_SECRET_KEY}
-    volumes:
-      - ./searxng:/etc/searxng
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "wget",
-          "--no-verbose",
-          "--tries=1",
-          "--spider",
-          "http://localhost:8080/healthz",
-        ]
-      interval: 30s
-      timeout: 3s
-      retries: 5
-      start_period: 15s
-    networks:
-      - agent-shared-network
   qdrant:
     image: qdrant/qdrant:v1.16.3
     container_name: agent_qdrant
@@ -146,8 +119,6 @@ services:
       redis:
         condition: service_healthy
       qdrant:
-        condition: service_healthy
-      searxng:
         condition: service_healthy
     healthcheck:
       test:

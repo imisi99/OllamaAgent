@@ -1,8 +1,10 @@
-from datetime import datetime
 import json
 import logging
+import ollama
+import random
 import zoneinfo
-import httpx
+from tavily import TavilyClient
+from datetime import datetime
 from typing import Annotated, Any
 from langchain.tools import InjectedState, tool
 from zoneinfo import ZoneInfo
@@ -120,38 +122,57 @@ def remove_insight_about_user(
 @tool(parse_docstring=True)
 def web_search(query: str, max_results: int = 5) -> list[dict] | str:
     """
-    This make a web search using the query and max results (The max results defaults to 5)
+    This makes a web search using the query and max results (The max results is 10 it defaults to 5)
 
     Args:
         query: The search query to use for the web search
         max_results: The maximum number of contents to return from the web search
     """
+
+    def ollama_search(query: str, max_results: int = 5):
+        response = ollama.web_search(query, max_results)
+        response.results
+
+    def tavily_search(query: str, max_results: int = 5):
+        tavily_client = TavilyClient(api_key="")
+        response = tavily_client.search(
+            query,
+        )
+
+    rand = random.randint(0, 1)
+
     try:
-        resp = httpx.get(
-            "http://searxng:8080/search",
-            params={"q": query, "format": "json", "engines": "google,bing,duckduckgo"},
-            timeout=10,
-        )
+        if rand == 0:
+            ollama_search(query, max_results)
+        else:
+            tavily_search(query, max_results)
     except Exception as e:
-        logging.info(
-            f"[TOOL WEB_SEARCH] Failed to search the web most likely due to being offline -> {e}"
-        )
-        return "The user is offline and web search is currently unavailable"
+        pass
 
-    results = resp.json().get("results", [])
 
-    if len(results) == 0:
-        unresponsive = resp.json().get("unresponsive_engines", [])
-        if len(unresponsive) >= 1:
-            return f"The web engines didn't respond likely due to being offline don't try anytime soon: {','.join(f'ENGINE: {engine[0]}, RESP: {engine[1]}' for engine in unresponsive)}"
+@tool(parse_docstring=True)
+def web_fetch(url: str) -> dict | str:
+    """
+    This makes a web fetch using the url provided to fetch the page content for that url
 
-    if len(results) == 0:
-        return "The web search didn't return any result"
+    Args:
+        url: The url to fetch the page content
+    """
 
-    return [
-        {"title": r["title"], "url": r["url"], "content": r.get("content", "")}
-        for r in results[:max_results]
-    ]
+    def ollama_fetch(url: str):
+        response = ollama.web_fetch(url)
+        return {
+            "title": response.title,
+            "content": response.content,
+            "links_found_on_page": response.links,
+        }
+
+    try:
+        return ollama_fetch(url)
+    except Exception as e:
+        pass
+
+    return ""
 
 
 @tool(parse_docstring=True)
@@ -196,11 +217,10 @@ async def find_related_sessions(
             )
     else:
         for session in sessions:
-            chats.append(f"{session['name']}: \n")
-            chats.append(
-                {"role": msg["role"], "content": msg["content"]}
-                for msg in session["messages"]
+            msg = "\n".join(
+                f"{msg['role']}: {msg['content']}" for msg in session["messages"]
             )
+            chats.append(f"{session['name']}: \n{msg}")
 
     logging.info(f"Retrieval information for session with id {state['session_id']}")
 
