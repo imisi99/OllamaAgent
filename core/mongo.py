@@ -146,6 +146,7 @@ class Database:
             projection={
                 "messages": False,
             },
+            # With order
         ) as cursor:
             for doc in cursor:
                 sessions.append(doc)
