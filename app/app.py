@@ -722,7 +722,7 @@ def chat():
             key="chat",
             accept_file="multiple",
             max_upload_size=20,
-            max_chars=1000,
+            max_chars=5000,
             accept_audio=True,
             file_type=[f_type for f_type in TEXT_EXTS].extend([".png", ".jpeg"]),
         )

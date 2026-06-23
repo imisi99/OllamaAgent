@@ -25,7 +25,6 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter, Language
 from langchain_ollama import ChatOllama
 from langchain.agents import create_agent
 from langgraph.graph import StateGraph, END
-from pathlib import Path
 
 from core.qdrant import Qdrant
 from db.redis import get_redis_database
@@ -64,7 +63,7 @@ class Model:
     def build_graph(self, agent):
         def update_memory(state: SessionState) -> SessionState:
             get_redis_database().add_short_term_memory(
-                state["session_id"], state["message"], True
+                state["session_id"], state["message"]
             )
 
             return state
@@ -400,7 +399,7 @@ class Model:
     def generate_title(self, content: str, audio: Audio | None) -> str:
         title = "Untitled Session"
         prompt = """
-        Generate a title for a chat session using the user input as context.
+        Generate a short concise title for a chat session using the user input as context.
         Your response should be the title ONLY (one title) without the string quote or any tags 
         Examples are (Explaining Docker Compose, Implementing gRPC in Go and Python)
         """
