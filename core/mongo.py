@@ -72,32 +72,21 @@ class Database:
     def fetch_session(self, session_id: str) -> Session | None:
         result = self.session_collection.find_one({"_id": ObjectId(session_id)})
         if result is not None:
-            message: list[Message] = []
             for msg in result["messages"]:
                 self.denormalize_image_files(msg["images"], msg["files"])
                 self.denormalize_audio(msg["audio"])
-                message.append(
-                    {
-                        "content": msg["content"],
-                        "thought": msg["thought"],
-                        "audio": msg["audio"],
-                        "role": msg["role"],
-                        "timestamp": self.denormalize_timestamp(msg["timestamp"]),
-                        "images": msg["images"],
-                        "files": msg["files"],
-                    }
-                )
+                msg["timestamp"] = self.denormalize_timestamp(msg["timestamp"])
 
             session: Session = {
                 "_id": str(result["_id"]),
                 "uuid": result["uuid"],
                 "name": result["name"],
-                "messages": message,
+                "messages": result["messages"],
                 "created_at": self.denormalize_timestamp(result["created_at"]),
             }
 
             return session
-        return None
+        return result
 
     def fetch_sessions(self, ids: list[str]) -> list[Session]:
         sessions = []
@@ -109,21 +98,10 @@ class Database:
 
         result: list[Session] = []
         for session in sessions:
-            message: list[Message] = []
             for msg in session["messages"]:
                 self.denormalize_image_files(msg["images"], msg["files"])
                 self.denormalize_audio(msg["audio"])
-                message.append(
-                    {
-                        "content": msg["content"],
-                        "thought": msg["thought"],
-                        "audio": msg["audio"],
-                        "role": msg["role"],
-                        "images": msg["images"],
-                        "files": msg["files"],
-                        "timestamp": self.denormalize_timestamp(msg["timestamp"]),
-                    }
-                )
+                msg["timestamp"] = self.denormalize_timestamp(msg["timestamp"])
 
             result.append(
                 {
@@ -131,7 +109,7 @@ class Database:
                     "uuid": session["uuid"],
                     "name": session["name"],
                     "created_at": self.denormalize_timestamp(session["created_at"]),
-                    "messages": message,
+                    "messages": session["timestamp"],
                 }
             )
 
@@ -175,71 +153,88 @@ class Database:
 
         result: list[Session] = []
         for session in sessions:
-            message: list[Message] = []
             for msg in session["messages"]:
                 self.denormalize_image_files(msg["images"], msg["files"])
                 self.denormalize_audio(msg["audio"])
-                message.append(
-                    Message(
-                        {
-                            "content": msg["content"],
-                            "thought": msg["thought"],
-                            "audio": msg["audio"],
-                            "role": msg["role"],
-                            "timestamp": self.denormalize_timestamp(msg["timestamp"]),
-                            "images": msg["images"],
-                            "files": msg["files"],
-                        }
-                    )
-                )
+                msg["timestamp"] = self.denormalize_timestamp(msg["timestamp"])
+
             result.append(
                 {
                     "_id": str(session["_id"]),
                     "uuid": session["uuid"],
                     "name": session["name"],
                     "created_at": self.denormalize_timestamp(session["created_at"]),
-                    "messages": message,
+                    "messages": session["messages"],
                 }
             )
 
         return result
 
-    def fetch_all_session_exclude_files(self) -> list[Session]:
+    def fetch_session_for_redis(self, session_id: str) -> Session | None:
+        result = self.session_collection.find_one(
+            filter={"_id": ObjectId(session_id)},
+            projection={
+                "created_at": False,
+                "messages.thought": False,
+                "messages.files": False,
+                "messages.timestamp": False,
+            },
+        )
+
+        if result is None:
+            return result
+
+        for msg in result["messages"]:
+            self.denormalize_audio(msg["audio"])
+            self.denormalize_image_files(msg["images"], [])
+            msg["timestamp"] = ""
+            msg["files"] = []
+            msg["thought"] = ""
+
+        session = Session(
+            {
+                "messages": result["messages"],
+                "_id": session_id,
+                "created_at": "",
+                "name": result["name"],
+                "uuid": result["uuid"],
+            }
+        )
+
+        return session
+
+    def fetch_all_session_for_redis(self) -> list[Session]:
         sessions = []
 
         with self.session_collection.find(
-            filter={}, projection={"files": False, "images": False}
+            filter={},
+            projection={
+                "created_at": False,
+                "messages.thought": False,
+                "messages.files": False,
+                "messages.timestamp": False,
+            },
         ) as cursor:
             for doc in cursor:
                 sessions.append(doc)
 
         result: list[Session] = []
         for session in sessions:
-            message: list[Message] = []
             for msg in session["messages"]:
                 self.denormalize_audio(msg["audio"])
-                message.append(
-                    Message(
-                        {
-                            "content": msg["content"],
-                            "thought": msg["thought"],
-                            "role": msg["role"],
-                            "timestamp": self.denormalize_timestamp(msg["timestamp"]),
-                            "audio": msg["audio"],
-                            "images": [],
-                            "files": [],
-                        }
-                    )
-                )
+                self.denormalize_image_files(msg["images"], [])
+                msg["timestamp"] = ""
+                msg["files"] = []
+                msg["thought"] = ""
 
             result.append(
                 Session(
                     {
                         "_id": str(session["_id"]),
                         "uuid": session["uuid"],
-                        "created_at": self.denormalize_timestamp(session["created_at"]),
+                        "created_at": "",
                         "name": session["name"],
-                        "messages": message,
+                        "messages": session["messages"],
                     }
                 )
             )
