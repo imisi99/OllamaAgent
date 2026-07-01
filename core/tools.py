@@ -17,10 +17,6 @@ from db.qdrant import get_qdrant_database
 from schemas.agent import SessAgentState
 from schemas.mongo import Session
 
-# TODO:
-# The web search works for only the bing engine the duckduckgo (timeout), google (request denied) (What's the score for and should it be added ?)
-# The web search could also work by adding a search url for more content ?
-
 
 @tool
 def get_current_time(timezone: str = "UTC") -> str:
@@ -171,6 +167,12 @@ def web_fetch(url: str) -> dict | str:
         return ollama_fetch(url)
     except Exception as e:
         pass
+
+    def tavily_fetch(url: str):
+        tavily_client = TavilyClient(api_key="")
+        response = tavily_client.extract(url)
+    try:
+    except e
 
     return ""
 
