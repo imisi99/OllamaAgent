@@ -5,6 +5,8 @@ from .mongo import Database
 import redis
 from schemas.mongo import Message
 
+# TODO: It doesn't load previously existing chat when continuing
+
 
 class Redis:
     def __init__(self, client: redis.Redis, mongoDB: Database) -> None:

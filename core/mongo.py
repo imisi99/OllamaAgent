@@ -1,5 +1,6 @@
 import base64
 from datetime import datetime
+import re
 from typing import Any
 from bson import ObjectId
 from pymongo import MongoClient
@@ -89,12 +90,10 @@ class Database:
         return result
 
     def fetch_sessions(self, ids: list[str]) -> list[Session]:
-        sessions = []
         with self.session_collection.find(
             {"_id": [ObjectId(id) for id in ids]}
         ) as cursor:
-            for doc in cursor:
-                sessions.append(doc)
+            sessions = list(cursor)
 
         result: list[Session] = []
         for session in sessions:
@@ -117,39 +116,32 @@ class Database:
 
     # TODO: Fetch in order of last message datetime && Also exclude the message resources
     def fetch_all_session_preview(self) -> list[Session]:
-        sessions = []
+        with self.session_collection.find(filter={}, projection={}) as cursor:
+            sessions = list(cursor)
 
-        with self.session_collection.find(
-            filter={},
-            projection={
-                "messages": False,
-            },
-            # With order
-        ) as cursor:
-            for doc in cursor:
-                sessions.append(doc)
+        sessions.sort(
+            key=lambda s: s["messages"][-1]["timestamp"]
+            if s["messages"]
+            else s["created_at"]
+        )
 
         result: list[Session] = []
         for session in sessions:
-            message: list[Message] = []
             result.append(
                 {
                     "_id": str(session["_id"]),
                     "uuid": session["uuid"],
                     "name": session["name"],
                     "created_at": self.denormalize_timestamp(session["created_at"]),
-                    "messages": message,
+                    "messages": [],
                 }
             )
 
         return result
 
     def fetch_all_session(self) -> list[Session]:
-        sessions = []
-
         with self.session_collection.find({}) as cursor:
-            for doc in cursor:
-                sessions.append(doc)
+            sessions = list(cursor)
 
         result: list[Session] = []
         for session in sessions:
@@ -204,8 +196,6 @@ class Database:
         return session
 
     def fetch_all_session_for_redis(self) -> list[Session]:
-        sessions = []
-
         with self.session_collection.find(
             filter={},
             projection={
@@ -215,8 +205,7 @@ class Database:
                 "messages.timestamp": False,
             },
         ) as cursor:
-            for doc in cursor:
-                sessions.append(doc)
+            sessions = list(cursor)
 
         result: list[Session] = []
         for session in sessions:
@@ -279,9 +268,10 @@ class Database:
         with self.user_collection.find(
             filter={}, projection={"memory": False}
         ) as cursor:
-            for user in cursor:
-                return str(user["_id"]), user["name"]
-        return None
+            user = list(cursor)
+            if len(user) == 1:
+                return str(user[0]["_id"]), user[0]["name"]
+            return None
 
     def fetch_user(self, user_id: str) -> User | None:
         result = self.user_collection.find_one({"_id": ObjectId(user_id)})

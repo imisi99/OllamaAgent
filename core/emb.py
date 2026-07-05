@@ -4,8 +4,6 @@ from typing import Optional
 
 from schemas.mongo import Session
 
-# TODO: Add a name to the uhm embedding of the chunks ?
-
 
 class EmbeddingModel:
     def __init__(self, emb_model: OllamaEmbeddings) -> None:

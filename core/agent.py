@@ -289,7 +289,6 @@ class Model:
                         suppressing = False
                     yield {"type": "tool_end", "content": ""}
 
-    # TODO: Add the source of the code and also the lines or something of the file.
     #
     def load_document(self, files: list[File]) -> list[Document]:
         loaders = {

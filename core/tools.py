@@ -3,7 +3,8 @@ import logging
 import ollama
 import random
 import zoneinfo
-from tavily import TavilyClient
+
+# from tavily import TavilyClient
 from datetime import datetime
 from typing import Annotated, Any
 from langchain.tools import InjectedState, tool
@@ -125,25 +126,27 @@ def web_search(query: str, max_results: int = 5) -> list[dict] | str:
         max_results: The maximum number of contents to return from the web search
     """
 
-    def ollama_search(query: str, max_results: int = 5):
-        response = ollama.web_search(query, max_results)
-        response.results
-
-    def tavily_search(query: str, max_results: int = 5):
-        tavily_client = TavilyClient(api_key="")
-        response = tavily_client.search(
-            query,
-        )
-
-    rand = random.randint(0, 1)
-
-    try:
-        if rand == 0:
-            ollama_search(query, max_results)
-        else:
-            tavily_search(query, max_results)
-    except Exception as e:
-        pass
+    # def ollama_search(query: str, max_results: int = 5):
+    #     response = ollama.web_search(query, max_results)
+    #     response.results
+    #
+    # def tavily_search(query: str, max_results: int = 5):
+    #     tavily_client = TavilyClient(api_key="")
+    #     response = tavily_client.search(
+    #         query,
+    #     )
+    #
+    # rand = random.randint(0, 1)
+    #
+    # try:
+    #     if rand == 0:
+    #         ollama_search(query, max_results)
+    #     else:
+    #         tavily_search(query, max_results)
+    # except Exception as e:
+    #     pass
+    #
+    return []
 
 
 @tool(parse_docstring=True)
@@ -155,24 +158,25 @@ def web_fetch(url: str) -> dict | str:
         url: The url to fetch the page content
     """
 
-    def ollama_fetch(url: str):
-        response = ollama.web_fetch(url)
-        return {
-            "title": response.title,
-            "content": response.content,
-            "links_found_on_page": response.links,
-        }
-
-    try:
-        return ollama_fetch(url)
-    except Exception as e:
-        pass
-
-    def tavily_fetch(url: str):
-        tavily_client = TavilyClient(api_key="")
-        response = tavily_client.extract(url)
-    try:
-    except e
+    # def ollama_fetch(url: str):
+    #     response = ollama.web_fetch(url)
+    #     return {
+    #         "title": response.title,
+    #         "content": response.content,
+    #         "links_found_on_page": response.links,
+    #     }
+    #
+    # try:
+    #     return ollama_fetch(url)
+    # except Exception as e:
+    #     pass
+    #
+    # def tavily_fetch(url: str):
+    #     tavily_client = TavilyClient(api_key="")
+    #     response = tavily_client.extract(url)
+    #
+    # try:
+    # except e
 
     return ""
 
