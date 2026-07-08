@@ -69,6 +69,9 @@ class Database:
             return False, ""
 
         return True, str(result.inserted_id)
+    
+    def add_session_to_project():
+        pass
 
     def fetch_session(self, session_id: str) -> Session | None:
         result = self.session_collection.find_one({"_id": ObjectId(session_id)})

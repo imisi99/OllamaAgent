@@ -81,6 +81,17 @@ def create_session(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={"msg": f"Failed to create the session -> {e}."},
         )
+    
+
+@session.put("/session/projects/{session_id}")
+def add_to_project(
+    session_id: str,
+    db: Database = Depends(get_mongo_database)
+):
+    try:
+        pass
+    except Exception as e:
+        pass
 
 
 @session.put("/session/rename/{session_id}/{session_uid}")
