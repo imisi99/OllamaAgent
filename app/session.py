@@ -81,10 +81,23 @@ def create_session(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={"msg": f"Failed to create the session -> {e}."},
         )
-    
 
-@session.put("/session/projects/{session_id}")
+@session.create("/session/projects/create")
+def create_project(name: str, db: Database = Depends(get_mongo_database)):
+    try:
+        created = db.create_project()
+        if not created:
+            raise Exception("DB operation to create project failed.")
+    except Exception as e:
+        logging.error(f"Failed to create project, An error occured -> {e}")
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"msg": f"Failed to create the project -> {e}."},
+        )
+
+@session.put("/session/projects/{session_id}/{project_id}")
 def add_to_project(
+    project_id: str,
     session_id: str,
     db: Database = Depends(get_mongo_database)
 ):

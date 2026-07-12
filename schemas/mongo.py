@@ -36,6 +36,11 @@ class Session(TypedDict):
     created_at: datetime | str
     messages: list[Message]
 
+class Project(TypedDict):
+    _id: str
+    name: str
+    sessions: list[Session]
+
 
 class User(TypedDict):
     _id: str

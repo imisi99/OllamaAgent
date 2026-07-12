@@ -69,6 +69,9 @@ class Database:
             return False, ""
 
         return True, str(result.inserted_id)
+
+    def create_project():
+        pass
     
     def add_session_to_project():
         pass
