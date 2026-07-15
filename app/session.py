@@ -106,6 +106,17 @@ def add_to_project(
     except Exception as e:
         pass
 
+@session.delete("/session/project/remove/{session_id}/{project_id}")
+def remove_from_project(
+    session_id: str,
+    project_id: str,
+    db: Database = Depends(get_mongo_database)
+):
+    try:
+        pass
+    except Exception as e:
+        pass
+    
 
 @session.put("/session/rename/{session_id}/{session_uid}")
 def rename(
