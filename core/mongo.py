@@ -1,21 +1,26 @@
 import base64
 from datetime import datetime
 import re
-from typing import Any
+from typing import Any, cast
 from bson import ObjectId
 from pymongo import MongoClient
-from schemas.mongo import Audio, File, Image, Message, Session, User
+from conf import CustomError
+from schemas.mongo import Audio, File, Image, Message, Session, User, Project
 
 
 class Database:
     def __init__(
-        self, db: str, session: str, user: str, client: MongoClient[dict[str, Any]]
+        self, db: str, session: str, user: str, message: str, project: str, client: MongoClient[dict[str, Any]]
     ) -> None:
         self.db = db
         self.session = session
         self.user = user
+        self.message = message
+        self.project = project
         self.client = client
         self.session_collection = self.client[self.db][self.session]
+        self.message_collection = self.client[self.db][self.message]
+        self.project_collection = self.client[self.db][self.project]
         self.user_collection = self.client[self.db][self.user]
 
     def normalize_timestamp(self, timestamp: datetime | str) -> datetime:
@@ -50,158 +55,176 @@ class Database:
             if isinstance(audio["audio"], bytes):
                 audio["audio"] = base64.b64encode(audio["audio"]).decode()
 
-    def create_session(self, session: Session) -> tuple[bool, str]:
+    def create_message(self, message: Message) -> CustomError | None:
+        self.normalize_image_files(message["images"], message["files"])
+        self.normalize_audio(message["audio"])
+        message["timestamp"] = self.normalize_timestamp(message["timestamp"])
+
+        result = self.message_collection.insert_one(
+            {
+                "role": message["role"],
+                "content": message["content"],
+                "audio": message["audio"],
+                "thought": message["thought"],
+                "files": message["files"],
+                "images": message["images"],
+                "session_id": message["session_id"],
+                "timestamp": message["timestamp"]
+            }
+        )
+
+        if not result.acknowledged:
+            return CustomError(message="Failed to create message.", code=500)
+
+    def create_session(self, session: Session) -> tuple[CustomError | None, str]:
         session["created_at"] = self.normalize_timestamp(session["created_at"])
-        msg = session["messages"][0]
-        msg_time = msg["timestamp"]
-        msg["timestamp"] = self.normalize_timestamp(msg_time)
-        self.normalize_image_files(msg["images"], msg["files"])
-        self.normalize_audio(msg["audio"])
+        session["last_edited"] = self.normalize_timestamp(session["last_edited"])
         result = self.session_collection.insert_one(
             {
                 "uuid": session["uuid"],
                 "name": session["name"],
                 "created_at": session["created_at"],
-                "messages": session["messages"],
+                "last_edited": session["last_edited"],
+                "project_id": session["project_id"],
             }
         )
         if not result.acknowledged:
-            return False, ""
+            return CustomError(message="Failed to create session", code=500,), ""
 
-        return True, str(result.inserted_id)
+        return None, str(result.inserted_id)
 
-    def create_project():
-        pass
-    
-    def add_session_to_project():
-        pass
-
-    def fetch_session(self, session_id: str) -> Session | None:
-        result = self.session_collection.find_one({"_id": ObjectId(session_id)})
-        if result is not None:
-            for msg in result["messages"]:
-                self.denormalize_image_files(msg["images"], msg["files"])
-                self.denormalize_audio(msg["audio"])
-                msg["timestamp"] = self.denormalize_timestamp(msg["timestamp"])
-
-            session: Session = {
-                "_id": str(result["_id"]),
-                "uuid": result["uuid"],
-                "name": result["name"],
-                "messages": result["messages"],
-                "created_at": self.denormalize_timestamp(result["created_at"]),
+    def create_project(self, project: Project) -> tuple[CustomError | None, str]:
+        project["created_at"] = self.normalize_timestamp(project["created_at"])
+        result = self.project_collection.insert_one(
+            {
+                "name": project["name"],
+                "goal": project["goal"],
+                "created_at": project["created_at"],
             }
-
-            return session
-        return result
-
-    def fetch_sessions(self, ids: list[str]) -> list[Session]:
-        with self.session_collection.find(
-            {"_id": [ObjectId(id) for id in ids]}
-        ) as cursor:
-            sessions = list(cursor)
-
-        result: list[Session] = []
-        for session in sessions:
-            for msg in session["messages"]:
-                self.denormalize_image_files(msg["images"], msg["files"])
-                self.denormalize_audio(msg["audio"])
-                msg["timestamp"] = self.denormalize_timestamp(msg["timestamp"])
-
-            result.append(
-                {
-                    "_id": str(session["_id"]),
-                    "uuid": session["uuid"],
-                    "name": session["name"],
-                    "created_at": self.denormalize_timestamp(session["created_at"]),
-                    "messages": session["timestamp"],
-                }
-            )
-
-        return result
-
-    # TODO: Fetch in order of last message datetime && Also exclude the message resources
-    def fetch_all_session_preview(self) -> list[Session]:
-        with self.session_collection.find(filter={}, projection={}) as cursor:
-            sessions = list(cursor)
-
-        sessions.sort(
-            key=lambda s: s["messages"][-1]["timestamp"]
-            if s["messages"]
-            else s["created_at"]
         )
 
-        result: list[Session] = []
-        for session in sessions:
-            result.append(
-                {
-                    "_id": str(session["_id"]),
-                    "uuid": session["uuid"],
-                    "name": session["name"],
-                    "created_at": self.denormalize_timestamp(session["created_at"]),
-                    "messages": [],
-                }
-            )
+        if not result.acknowledged:
+            return CustomError(message="Failed to create project.", code=500), ""
+        return None, str(result.inserted_id)
 
-        return result
+    
 
-    def fetch_all_session(self) -> list[Session]:
-        with self.session_collection.find({}) as cursor:
-            sessions = list(cursor)
 
-        result: list[Session] = []
-        for session in sessions:
-            for msg in session["messages"]:
-                self.denormalize_image_files(msg["images"], msg["files"])
-                self.denormalize_audio(msg["audio"])
-                msg["timestamp"] = self.denormalize_timestamp(msg["timestamp"])
+    def fetch_message(self, session_id: str) -> list[Message]:
+        with self.message_collection.find({"session_id": ObjectId(session_id)}) as cursor:
+            messages = list(cursor)
 
-            result.append(
-                {
-                    "_id": str(session["_id"]),
-                    "uuid": session["uuid"],
-                    "name": session["name"],
-                    "created_at": self.denormalize_timestamp(session["created_at"]),
-                    "messages": session["messages"],
-                }
-            )
+        for msg in messages:
+            self.denormalize_audio(msg["audio"])
+            self.denormalize_image_files(msg["images"], msg["files"])
+            msg["timestamp"] = self.denormalize_timestamp(msg["timestamp"])
 
-        return result
+        messages = cast(list[Message], messages)
+        return messages
 
-    def fetch_session_for_redis(self, session_id: str) -> Session | None:
-        result = self.session_collection.find_one(
-            filter={"_id": ObjectId(session_id)},
+    def fetch_message_for_redis(self, session_id: str) -> list[Message]:
+        with self.message_collection.find(
+            filter={"session_id": session_id},
             projection={
-                "created_at": False,
-                "messages.thought": False,
-                "messages.files": False,
-                "messages.timestamp": False,
-            },
-        )
+                "thought": False,
+                "files": False,
+                "timestamp": False,
+            }
+        ) as cursor:
+            messages = list(cursor)
 
-        if result is None:
-            return result
-
-        for msg in result["messages"]:
+        for msg in messages:
             self.denormalize_audio(msg["audio"])
             self.denormalize_image_files(msg["images"], [])
             msg["timestamp"] = ""
             msg["files"] = []
             msg["thought"] = ""
 
-        session = Session(
-            {
-                "messages": result["messages"],
-                "_id": session_id,
-                "created_at": "",
-                "name": result["name"],
-                "uuid": result["uuid"],
-            }
+
+        messages = cast(list[Message], messages)
+
+        return messages
+
+    def fetch_session(self, session_id: str) -> tuple[CustomError | None, Session | None, list[Message]]:
+        session = self.session_collection.find_one({"_id": ObjectId(session_id)})
+        if session is not None:
+            session["_id"] = str(session["_id"])
+            session["created_at"] = self.denormalize_timestamp(session["created_at"])
+            session["last_edited"] = self.denormalize_timestamp(session["last_edited"])
+            messages = self.fetch_message(session_id)
+
+            return None, cast(Session, session), messages
+
+        return None, None, []
+
+    def fetch_sessions(self, ids: list[str]) -> list[tuple[Session, list[Message]]]:
+        with self.session_collection.find(
+            {"_id": [ObjectId(id) for id in ids]}
+        ) as cursor:
+            sessions = list(cursor)
+
+        result: list[tuple[Session, list[Message]]] = []
+        for session in sessions:
+            session["_id"] = str(session["_id"])
+            session["created_at"] = self.denormalize_timestamp(session["created_at"])
+            session["last_edited"] = self.denormalize_timestamp(session["last_edited"])
+
+            result.append(
+                (
+                    cast(Session, session),
+                    self.fetch_message(session["_id"])
+                )
+            )
+
+        return result
+
+    def fetch_all_session(self) -> list[tuple[Session, list[Message]]]:
+        with self.session_collection.find({}) as cursor:
+            sessions = list(cursor)
+
+        result: list[tuple[Session, list[Message]]] = []
+        for session in sessions:
+            session["_id"] = str(session["_id"])
+            session["created_at"] = self.denormalize_timestamp(session["created_at"])
+            session["last_edited"] = self.denormalize_timestamp(session["last_edited"])
+
+            result.append(
+                (
+                    cast(Session, session),
+                    self.fetch_message(session["_id"])
+                )
+            )
+
+        return result
+
+    # TODO: Fetch in order of last message datetime && Also exclude the message resources   
+    def fetch_all_session_preview(self) -> list[Session]:
+        with self.session_collection.find(filter={}, projection={}) as cursor:
+            sessions = list(cursor)
+
+        sessions.sort(
+            key=lambda s: s["last_edited"]
         )
 
-        return session
+        for session in sessions:
+            session["_id"] = str(session["_id"])
+            session["created_at"] = self.denormalize_timestamp(session["created_at"])
+            session["last_edited"] = self.denormalize_timestamp(session["last_edited"])
 
-    def fetch_all_session_for_redis(self) -> list[Session]:
+        return cast(list[Session], sessions)
+
+
+    def fetch_session_for_redis(self, session_id: str) -> tuple[CustomError | None, list[Message]]:
+        result = self.session_collection.find_one(filter={"_id": ObjectId(session_id)})
+
+        if result is None:
+            return CustomError(message="Session not found.", code=404), []
+
+        return None, self.fetch_message_for_redis(session_id)
+
+
+
+    def fetch_all_session_for_redis(self) -> list[tuple[Session, list[Message]]]:
         with self.session_collection.find(
             filter={},
             projection={
@@ -213,50 +236,116 @@ class Database:
         ) as cursor:
             sessions = list(cursor)
 
-        result: list[Session] = []
+        result: list[tuple[Session, list[Message]]] = []
         for session in sessions:
-            for msg in session["messages"]:
-                self.denormalize_audio(msg["audio"])
-                self.denormalize_image_files(msg["images"], [])
-                msg["timestamp"] = ""
-                msg["files"] = []
-                msg["thought"] = ""
+            session["_id"] = str(session["_id"])
+            session["created_at"] = self.denormalize_timestamp(session["created_at"])
+            session["last_edited"] = self.denormalize_timestamp(session["last_edited"])
 
             result.append(
-                Session(
-                    {
-                        "_id": str(session["_id"]),
-                        "uuid": session["uuid"],
-                        "created_at": "",
-                        "name": session["name"],
-                        "messages": session["messages"],
-                    }
+                (
+                    cast(Session, session),
+                    self.fetch_message_for_redis(session["_id"])
                 )
             )
 
         return result
 
-    def rename_session(self, session_id: str, name: str) -> bool:
+    def fetch_project(self, project_id: str) -> tuple[CustomError | None, Project | None, list[Session]]:
+        project = self.project_collection.find_one({"_id": ObjectId(project_id)})
+
+        if not project:
+            return CustomError(message="Project not found.", code=404), None, []
+
+        with self.session_collection.find({"project_id": project_id}) as cursor:
+            sessions = list(cursor)
+
+        sessions.sort(
+            key=lambda s: s["last_edited"]
+        )
+
+        for session in sessions:
+            session["_id"] = str(session["_id"])
+            session["created_at"] = self.denormalize_timestamp(session["created_at"])
+            session["last_edited"] = self.denormalize_timestamp(session["last_edited"])
+            
+        return None, cast(Project, project), cast(list[Session], sessions)
+
+
+    def fetch_projects(self) -> list[Project]:
+        with self.project_collection.find() as cursor:
+            projects = list(cursor)
+
+        for project in projects:
+            project["_id"] = str(project["_id"])
+            project["created_at"] = self.denormalize_timestamp(project["created_at"])
+
+        return cast(list[Project], projects)
+
+
+    def add_session_to_project(self, session_id: str, project_id: str) -> CustomError | None:
+        project = self.project_collection.find_one({"_id": ObjectId(project_id)})
+
+        if not project:
+            return CustomError(message="Project doesn't exist.", code=404)
+
+        session = self.session_collection.find_one_and_update(
+            filter={"_id": ObjectId(session_id)},
+            update={"$set": {"project_id": project_id}}
+        )
+
+        if not session:
+            return CustomError(message="Session deosn't exist.", code=404)
+
+    def remove_session_from_project(self, session_id: str, project_id: str) -> CustomError | None:
+        project = self.project_collection.find_one({"_id": ObjectId(project_id)})
+
+        if not project:
+            return CustomError(message="Project doesn't exist.", code=404)
+
+        session = self.session_collection.find_one_and_update(
+            filter={"_id": ObjectId(session_id)},
+            update={"$set": {"project_id": ""}}
+        )
+
+        if not session:
+            return CustomError(message="Session deosn't exist.", code=404)
+
+    def rename_session(self, session_id: str, name: str) -> CustomError | None:
         result = self.session_collection.update_one(
             {"_id": ObjectId(session_id)}, {"$set": {"name": name}}
         )
 
-        return result.acknowledged
+        if not result.acknowledged:
+            return CustomError(message="Renaming of session was not acknowledged", code=500)
 
-    def add_messages(self, session_id: str, message: Message) -> bool:
-        self.normalize_image_files(message["images"], message["files"])
-        self.normalize_audio(message["audio"])
-        message["timestamp"] = self.normalize_timestamp(message["timestamp"])
-        result = self.session_collection.update_one(
-            {"_id": ObjectId(session_id)}, {"$push": {"messages": message}}
-        )
 
-        return result.acknowledged
-
-    def delete_session(self, session_id: str) -> bool:
+    def delete_session(self, session_id: str) -> CustomError | None:
         result = self.session_collection.delete_one({"_id": ObjectId(session_id)})
 
-        return result.acknowledged
+        if not result.acknowledged:
+            return CustomError(message="Deleting of session was not acknowledged", code=500)
+
+
+    def delete_project(self, project_id: str) -> CustomError | None:
+        project = self.project_collection.find_one({"_id": project_id})
+
+        if not project:
+            return CustomError(message="Project doesn't exist.", code=404)
+
+        result = self.session_collection.update_many(
+            filter={"project_id": project_id},
+            update={"$set": {"project_id": ""}}
+        )
+
+        if not result.acknowledged:
+            return CustomError(message="Deleting of project was not acknowledged", code=500)
+
+        project = self.project_collection.find_one_and_delete({"_id": project_id})
+
+        if not project:
+            return CustomError(message="Deleting of project was not completed", code=500)
+
 
     def create_user(self, username: str) -> tuple[str, bool]:
         result = self.user_collection.insert_one(
@@ -265,6 +354,7 @@ class Database:
                 "memory": {},
             }
         )
+
         if not result.acknowledged:
             return "", False
 

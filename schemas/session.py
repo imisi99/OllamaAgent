@@ -10,6 +10,11 @@ class CreateSession(BaseModel):
     images: list[Image]
 
 
+class CreateProject(BaseModel):
+    name: str
+    goal: str
+
+
 class SimilarSessions(BaseModel):
     uid: str
     threshold: float

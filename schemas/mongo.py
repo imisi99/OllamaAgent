@@ -26,6 +26,7 @@ class Message(TypedDict):
     thought: str
     files: list[File]
     images: list[Image]
+    session_id: str
     timestamp: datetime | str
 
 
@@ -34,12 +35,14 @@ class Session(TypedDict):
     uuid: str
     name: str
     created_at: datetime | str
-    messages: list[Message]
+    last_edited: datetime | str
+    project_id: str
 
 class Project(TypedDict):
     _id: str
     name: str
-    sessions: list[Session]
+    goal: str
+    created_at: datetime | str
 
 
 class User(TypedDict):

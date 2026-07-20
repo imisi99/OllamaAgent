@@ -1,18 +1,20 @@
 import copy
 import logging
 import datetime
+from os import register_at_fork, stat
 from uuid import uuid4
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 from starlette import status
+from typing import cast
 
 from core.agent import get_model, Model
 from core.mongo import Database
 from core.qdrant import Job, Qdrant, Task
 from db.mongo import get_mongo_database
 from db.qdrant import get_qdrant_database
-from schemas.mongo import Message, Session
-from schemas.session import CreateSession, SimilarSessions
+from schemas.mongo import Message, Project, Session
+from schemas.session import CreateProject, CreateSession, SimilarSessions
 
 session = APIRouter()
 
@@ -46,29 +48,38 @@ def create_session(
         sess: Session = {
             "_id": "",
             "uuid": uid,
-            "messages": [
-                {
-                    "timestamp": datetime.datetime.now(),
-                    "thought": "",
-                    "audio": prompt.audio,
-                    "content": prompt.prompt,
-                    "files": prompt.files,
-                    "images": prompt.images,
-                    "role": "user",
-                }
-            ],
             "created_at": datetime.datetime.now(),
+            "last_edited": datetime.datetime.now(),
+            "project_id": "",
             "name": title,
         }
 
-        created, id = db.create_session(copy.deepcopy(sess))
+        err, id = db.create_session(copy.deepcopy(sess))
 
-        if not created:
-            raise Exception("MongoDB operation to create session was not acknowledged")
+        if err:
+            return JSONResponse(content=err.message,status_code=err.code)
 
         sess["_id"] = id
 
         qdb.add_job(Task(job=Job.CREATE_POINT, session=sess))
+
+        message = Message({
+            "timestamp": datetime.datetime.now(),
+            "thought": "",
+            "audio": prompt.audio,
+            "content": prompt.prompt,
+            "files": prompt.files,
+            "images": prompt.images,
+            "role": "user",
+            "session_id": id
+            })
+
+        err = db.create_message(message)
+
+        if err:
+            return JSONResponse(content=err.message,status_code=err.code)
+
+        qdb.add_job(Task(job=Job.UPDATE_POINT, uid=uid, message=message))
 
         return JSONResponse(
             status_code=status.HTTP_201_CREATED,
@@ -81,43 +92,7 @@ def create_session(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={"msg": f"Failed to create the session -> {e}."},
         )
-
-@session.create("/session/projects/create")
-def create_project(name: str, db: Database = Depends(get_mongo_database)):
-    try:
-        created = db.create_project()
-        if not created:
-            raise Exception("DB operation to create project failed.")
-    except Exception as e:
-        logging.error(f"Failed to create project, An error occured -> {e}")
-        return JSONResponse(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"msg": f"Failed to create the project -> {e}."},
-        )
-
-@session.put("/session/projects/{session_id}/{project_id}")
-def add_to_project(
-    project_id: str,
-    session_id: str,
-    db: Database = Depends(get_mongo_database)
-):
-    try:
-        pass
-    except Exception as e:
-        pass
-
-@session.delete("/session/project/remove/{session_id}/{project_id}")
-def remove_from_project(
-    session_id: str,
-    project_id: str,
-    db: Database = Depends(get_mongo_database)
-):
-    try:
-        pass
-    except Exception as e:
-        pass
     
-
 @session.put("/session/rename/{session_id}/{session_uid}")
 def rename(
     session_id: str,
@@ -127,9 +102,9 @@ def rename(
     qdb: Qdrant = Depends(get_qdrant_database),
 ):
     try:
-        updated = db.rename_session(session_id, name)
-        if not updated:
-            raise Exception("MongoDB operation to rename session not acknowledged.")
+        err = db.rename_session(session_id, name)
+        if err:
+            return JSONResponse(content=err.message, status_code=err.code)
 
         qdb.add_job(Task(uid=session_uid, job=Job.UPDATE_PAYLOAD, name=name))
 
@@ -172,10 +147,12 @@ def add_message(
             )
 
         message["timestamp"] = datetime.datetime.now()
+        message["session_id"] = session_id
 
-        created = db.add_messages(session_id, copy.deepcopy(message))
-        if not created:
-            raise Exception("MongoDB operation to add message was not acknowledged")
+        err = db.create_message(copy.deepcopy(message))
+
+        if err:
+            return JSONResponse(content=err.message, status_code=err.code)
 
         qdb.add_job(Task(job=Job.UPDATE_POINT, uid=session_uid, message=message))
 
@@ -198,7 +175,7 @@ def add_message(
 def fetch_all_session_preview(db: Database = Depends(get_mongo_database)):
     try:
         sessions = db.fetch_all_session_preview()
-        if sessions is None or len(sessions) == 0:
+        if len(sessions) == 0:
             return JSONResponse(
                 status_code=status.HTTP_404_NOT_FOUND,
                 content={"msg": "No session created yet."},
@@ -220,7 +197,7 @@ def fetch_all_session_preview(db: Database = Depends(get_mongo_database)):
 def fetch_all_session(db: Database = Depends(get_mongo_database)):
     try:
         sessions = db.fetch_all_session()
-        if sessions is None or len(sessions) == 0:
+        if len(sessions) == 0:
             return JSONResponse(
                 status_code=status.HTTP_404_NOT_FOUND,
                 content={"msg": "No session created yet."},
@@ -241,15 +218,13 @@ def fetch_all_session(db: Database = Depends(get_mongo_database)):
 @session.get("/session/{session_id}")
 def fetch_single_session(session_id: str, db: Database = Depends(get_mongo_database)):
     try:
-        s_session = db.fetch_session(session_id)
-        if s_session is None:
-            return JSONResponse(
-                status_code=status.HTTP_404_NOT_FOUND,
-                content={"msg": f"Session with id -> {session_id} not found."},
-            )
+        err, sess, messages = db.fetch_session(session_id)
+        if err:
+            return JSONResponse(content=err.message, status_code=err.code)
 
         return JSONResponse(
-            status_code=status.HTTP_200_OK, content={"session": s_session}
+            status_code=status.HTTP_200_OK,
+            content={"session": sess, "messages": messages},
         )
 
     except Exception as e:
@@ -281,31 +256,162 @@ async def fetch_similar_sessions(
 
         points, avgScore = result
 
-        points_score: list[tuple[Session, float]] = [
-            (
-                Session(
-                    {
-                        "name": sess["name"],
-                        "_id": sess["_id"],
-                        "created_at": sess["created_at"],
-                        "messages": [],
-                        "uuid": sess["uuid"],
-                    }
-                ),
-                score,
-            )
-            for sess, score in points
-        ]
-
         return JSONResponse(
             status_code=status.HTTP_200_OK,
-            content={"score": avgScore, "sessions": points_score},
+            content={"score": avgScore, "sessions": points},
         )
+
     except Exception as e:
         logging.error(f"Failed to fetch similar sessions -> {e}")
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={"msg": f"Failed to fetch similar sessions -> {e}."},
+        )
+
+@session.post("/session/projects/create")
+def create_project(payload: CreateProject, db: Database = Depends(get_mongo_database)):
+    try:
+        project: Project = {
+            "_id": "",
+            "name": payload.name,
+            "goal": payload.goal,
+            "created_at": datetime.datetime.now(),
+        }
+
+        err, id = db.create_project(project)
+        if err:
+            return JSONResponse(content=err.message,status_code=err.code)
+
+        return JSONResponse(
+            status_code=status.HTTP_201_CREATED,
+            content={"id": id}
+        )
+
+    except Exception as e:
+        logging.error(f"Failed to create project, An error occured -> {e}")
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"msg": f"Failed to create the project -> {e}."},
+        )
+    
+
+@session.get("/session/projects/")
+def get_projects(
+    db: Database = Depends(get_mongo_database)
+):
+    try:
+        projects = db.fetch_projects()
+        
+        if len(projects) == 0:
+            return JSONResponse(
+                content={"msg": "No project found."},
+                status_code=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={"projects": projects}
+        )
+
+    except Exception as e:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"msg": f"Failed to retrieve projects -> {e}."},
+        )
+
+
+@session.get("/session/project/{project_id}")
+def get_project(
+    project_id: str,
+    db: Database = Depends(get_mongo_database)
+):
+    try:
+        err, project, sessions = db.fetch_project(project_id)
+        
+        if err:
+            return JSONResponse(content=err.message, status_code=err.code)
+
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={"project": project, "sessions": sessions},
+        )
+
+    except Exception as e:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"msg": f"Failed to retrieve project -> {e}."},
+        )
+
+@session.put("/session/projects/{session_id}/{project_id}")
+def add_to_project(
+    session_id: str,
+    project_id: str,
+    db: Database = Depends(get_mongo_database)
+):
+    try:
+        err = db.add_session_to_project(session_id, project_id)
+
+        if err:
+            return JSONResponse(content=err.message, status_code=err.code)
+
+        return JSONResponse(
+            status_code=status.HTTP_202_ACCEPTED,
+            content={"msg": "Session added to project."}
+        )
+
+    except Exception as e:
+        logging.error(f"Failed to update project to add session -> {e}")
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"msg": f"Failed to add session to project -> {e}."},
+        )
+
+@session.delete("/session/project/remove/{session_id}/{project_id}")
+def remove_from_project(
+    session_id: str,
+    project_id: str,
+    db: Database = Depends(get_mongo_database)
+):
+    try:
+        err = db.remove_session_from_project(session_id, project_id)
+
+        if err:
+            return JSONResponse(content=err.message, status_code=err.code)
+
+        return JSONResponse(
+            status_code=status.HTTP_202_ACCEPTED,
+            content={"msg": "Session removed from project."}
+        )
+
+    except Exception as e:
+        logging.error(f"Failed to update project to remove session -> {e}")
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"msg": f"Failed to remove session from project -> {e}."},
+        )
+    
+
+@session.delete("/session/project/delete/{project_id}")
+def delete_project(
+    project_id: str,
+    db: Database = Depends(get_mongo_database)
+):
+    try:
+        err = db.delete_project(project_id)
+
+        if err:
+            return JSONResponse(content=err.message, status_code=err.code)
+
+        return JSONResponse(
+            status_code=status.HTTP_204_NO_CONTENT,
+            content=None
+        )
+
+    except Exception as e:
+        logging.error(f"Failed to delete proejct -> {e}")
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"msg": f"Failed to delete project -> {e}."},
         )
 
 
