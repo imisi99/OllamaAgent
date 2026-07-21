@@ -30,6 +30,7 @@ from core.qdrant import Qdrant
 from db.redis import get_redis_database
 from schemas.agent import SessAgentState, SessionState
 from schemas.mongo import Audio, File, Message
+from schemas.qdrant import QMessage
 
 # TODO:
 # The prompt length is a factor causing slow response from the agent (reduce it)
@@ -420,7 +421,9 @@ class Model:
             logging.error(f"Failed to generate title -> {e}")
         return title
 
-    def summarize_messages(self, messages: list[Message]) -> str | None:
+    def summarize_messages(
+        self, messages: list[Message] | list[QMessage]
+    ) -> str | None:
         conversation = "\n".join(f"{m['role']}: {m['content']}" for m in messages)
 
         prompt = ChatPromptTemplate.from_messages(

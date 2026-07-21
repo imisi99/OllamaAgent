@@ -1,6 +1,5 @@
 import asyncio
 import logging
-from datetime import datetime
 from enum import Enum
 from typing import Union, cast
 from uuid import uuid4
@@ -14,8 +13,11 @@ from qdrant_client.models import (
     PointStruct,
 )
 from qdrant_client.http.models import UpdateStatus
-from .emb import EmbeddingModel
+
+from core.conf import CustomError
+from emb import EmbeddingModel
 from schemas.mongo import Message, Session
+from schemas.qdrant import QSession
 
 
 class Job(str, Enum):
@@ -49,16 +51,8 @@ class Qdrant:
         self.embedding = embedding
         self.jobs: asyncio.Queue[Task] = asyncio.Queue()
 
-    def normalize_created_at(self, timestamp: datetime | str) -> str:
-        if isinstance(timestamp, datetime):
-            return timestamp.isoformat()
-        return timestamp
-
-    async def create_point(self, session: Session) -> bool:
-        session["created_at"] = self.normalize_created_at(session["created_at"])
-        msg = session["messages"][0]
-        msg["timestamp"] = self.normalize_created_at(msg["timestamp"])
-        vector = await self.embedding.generate_vector_embedding(session)
+    async def create_point(self, session: Session) -> CustomError | None:
+        vector: list[float] = []
         result = self.client.upsert(
             collection_name="chats",
             points=[
@@ -68,9 +62,9 @@ class Qdrant:
                     payload={
                         "_id": session["_id"],
                         "uuid": session["uuid"],
+                        "project_id": session["project_id"],
                         "name": session["name"],
-                        "messages": session["messages"],
-                        "created_at": session["created_at"],
+                        "messages": [],
                     },
                 )
             ],
@@ -81,7 +75,12 @@ class Qdrant:
             logging.error(
                 f"Failed to create session with id -> {session['uuid']} result -> {result}"
             )
-        return success
+
+        return (
+            None
+            if success
+            else CustomError(message="Failed to create session", code=500)
+        )
 
     async def get_related_points(
         self,
@@ -90,7 +89,7 @@ class Qdrant:
         score_threshold: float = 0.5,
         use_query: bool = False,
         limit: int = 5,
-    ) -> tuple[list[tuple[Session, float]], float] | None:
+    ) -> tuple[CustomError | None, tuple[list[tuple[QSession, float]], float] | None]:
         vector = None
         if use_query:
             vector = await self.embedding.generate_vector_embedding_query(query)
@@ -103,14 +102,14 @@ class Qdrant:
                 logging.error(
                     f"Tried to find related points with id -> {id} but point doesn't exist in vector space."
                 )
-                return None
+                return CustomError(message="Point doesn't exist.", code=404), None
 
             vector = point[0].vector
             if vector is None:
                 logging.error(
                     f"Tried to find related points with id -> {id} but point doesn't have a vector component"
                 )
-                return None
+                return CustomError(message="Payload doesn't exist.", code=404), None
 
             if isinstance(vector, dict):
                 vector = vector.get("messages")
@@ -118,7 +117,12 @@ class Qdrant:
                     logging.error(
                         f"Tried to find related points with id -> {id} but point doesn't have a message vector component"
                     )
-                    return None
+                    return (
+                        CustomError(
+                            message="Message vector component doesn't exist.", code=404
+                        ),
+                        None,
+                    )
 
         result = self.client.query_points(
             collection_name="chats",
@@ -132,53 +136,56 @@ class Qdrant:
         )
 
         if len(result.points) == 0:
-            return None
+            return None, None
 
-        response: list[tuple[Session, float]] = []
+        response: list[tuple[QSession, float]] = []
         avgScore = 0
         for point in result.points:
             if point.payload:
-                payload = cast(Session, point.payload)
+                payload = cast(QSession, point.payload)
                 response.append((payload, point.score))
                 avgScore += point.score
 
         avgScore /= len(response) if len(response) > 0 else 1
         logging.info(f"Recommended {len(response)} with an average score of {avgScore}")
-        return response, avgScore
+        return None, (response, avgScore)
 
-    async def update_point(self, id: str, message: Message) -> bool:
-        point = self.client.retrieve("chats", ids=[id], with_payload=True)
+    async def update_point(self, uid: str, message: Message) -> CustomError | None:
+        point = self.client.retrieve(
+            "chats", ids=[message["session_id"]], with_payload=True
+        )
         if not point:
             logging.error(
                 f"Tried to update point with id -> {id} but point doesn't exist in vector space."
             )
-            return False
+            return CustomError(message="Point doesn't exist.", code=404)
 
         payload = point[0].payload
         if not payload:
             logging.error(
                 f"Tried to update point with id -> {id} but payload doesn't exist"
             )
-            return False
+            return CustomError(message="Payload doesn't exist.", code=404)
 
-        message["timestamp"] = self.normalize_created_at(message["timestamp"])
-
-        session = cast(Session, payload)
-        session["messages"].append(message)
+        session = cast(QSession, payload)
+        session["messages"].append(
+            {"content": message["content"], "role": message["role"]}
+        )
 
         vector = await self.embedding.generate_vector_embedding(session)
+
         result = self.client.upsert(
             collection_name="chats",
             points=[
                 PointStruct(
-                    id=id,
+                    id=uid,
                     vector={"messages": vector},
                     payload={
                         "_id": session["_id"],
                         "uuid": session["uuid"],
                         "name": session["name"],
                         "messages": session["messages"],
-                        "created_at": session["created_at"],
+                        "project_id": session["project_id"],
                     },
                 )
             ],
@@ -189,9 +196,14 @@ class Qdrant:
             logging.error(
                 f"Failed to update session with id -> {id} result -> {result}, status -> {result.status}"
             )
-        return success
 
-    async def update_payload(self, id: str, name: str) -> bool:
+        return (
+            None
+            if success
+            else CustomError(message="Failed to update session", code=500)
+        )
+
+    async def update_payload(self, id: str, name: str) -> CustomError | None:
         point = self.client.retrieve(
             collection_name="chats", ids=[id], with_payload=False
         )
@@ -200,7 +212,7 @@ class Qdrant:
             logging.error(
                 f"Tried to update payload with point id -> {id} but point doesn't exist in vector space."
             )
-            return False
+            return CustomError(message="Point doesn't exist.", code=404)
 
         result = self.client.set_payload(
             collection_name="chats", payload={"name": name}, points=[id]
@@ -211,9 +223,14 @@ class Qdrant:
             logging.error(
                 f"Failed to update the title of point with id -> {id} result -> {result}"
             )
-        return success
 
-    async def delete_point(self, id: str) -> bool:
+        return (
+            None
+            if success
+            else CustomError(message="Failed to update session payload.", code=500)
+        )
+
+    async def delete_point(self, id: str) -> CustomError | None:
         point = self.client.retrieve(
             collection_name="chats", ids=[id], with_payload=False
         )
@@ -222,7 +239,7 @@ class Qdrant:
             logging.error(
                 f"Tried to delete point with id -> {id} but point doesn't exist in vector space."
             )
-            return False
+            return CustomError(message="Point doesn't exist.", code=404)
 
         result = self.client.delete(collection_name="chats", points_selector=[id])
 
@@ -238,7 +255,12 @@ class Qdrant:
         success = result.status in (UpdateStatus.COMPLETED, UpdateStatus.ACKNOWLEDGED)
         if not success:
             logging.error(f"Failed to delete point with id -> {id} result -> {result}")
-        return success
+
+        return (
+            None
+            if success
+            else CustomError(message="Failed to delete session.", code=500)
+        )
 
     async def embed_chunks(self, session_id: str, chunks: list[Document]) -> bool:
         points = []

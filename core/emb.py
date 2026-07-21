@@ -2,8 +2,10 @@ import json
 from langchain_ollama import OllamaEmbeddings
 from typing import Optional
 
-from schemas.mongo import Session
-from .agent import Model
+
+from schemas.qdrant import QSession
+from agent import Model
+
 # TODO: Work on the excedding limit for the update (a newer model ? )
 
 
@@ -12,14 +14,17 @@ class EmbeddingModel:
         self.EMB_MODEL = emb_model
         self.model = model
 
-    async def generate_vector_embedding(self, session: Session) -> list[float]:
+    async def generate_vector_embedding(self, session: QSession) -> list[float]:
         info = {}
+
         if len(session["messages"]) >= 4:
             info["message"] = self.model.summarize_messages(session["messages"])
         else:
             info["message"] = [{"msg": msg["content"]} for msg in session["messages"]]
+
         text = json.dumps(info)
         vector = await self.EMB_MODEL.aembed_query(text)
+
         return vector
 
     async def generate_vector_embedding_query(self, query: str) -> list[float]:
@@ -30,9 +35,9 @@ class EmbeddingModel:
 EMB_MODEL: Optional[EmbeddingModel] = None
 
 
-def create_emb_model(emb_model: OllamaEmbeddings) -> EmbeddingModel:
-    model = EmbeddingModel(emb_model)
-    return model
+def create_emb_model(emb_model: OllamaEmbeddings, model: Model) -> EmbeddingModel:
+    emb_model = EmbeddingModel(emb_model, model)
+    return emb_model
 
 
 def get_emb_model() -> EmbeddingModel:

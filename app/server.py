@@ -11,6 +11,7 @@ from core.qdrant import Qdrant
 from db.mongo import get_mongo_database
 from db.qdrant import get_qdrant_database
 from schemas.agent import SessionConversation, SessionState
+from schemas.mongo import Message
 
 serve = APIRouter()
 
@@ -70,36 +71,26 @@ async def stream_chat(
         finally:
             await queue.put(None)
             if not input["ghost_session"] and full_response:
-                mongo_updated = db.add_messages(
-                    input["session_id"],
-                    {
-                        "content": full_response,
-                        "thought": thought_response,
-                        "role": "assistant",
-                        "audio": None,
-                        "timestamp": datetime.now(),
-                        "images": [],
-                        "files": [],
-                    },
-                )
+                message: Message = {
+                    "content": full_response,
+                    "thought": thought_response,
+                    "session_id": input["session_id"],
+                    "role": "assistant",
+                    "audio": None,
+                    "timestamp": datetime.now(),
+                    "images": [],
+                    "files": [],
+                }
 
-                if not mongo_updated:
+                err = db.create_message(message)
+
+                if err:
                     logging.error(
                         "[AGENT][MONGO] Failed to update chat response to mongo"
                     )
+                    return JSONResponse(status_code=err.code, content=err.message)
 
-                qdrant_updated = await qdb.update_point(
-                    input["session_uid"],
-                    {
-                        "content": full_response,
-                        "thought": thought_response,
-                        "role": "assistant",
-                        "audio": None,
-                        "timestamp": datetime.now(),
-                        "images": [],
-                        "files": [],
-                    },
-                )
+                qdrant_updated = await qdb.update_point()
 
                 if not qdrant_updated:
                     logging.error(
