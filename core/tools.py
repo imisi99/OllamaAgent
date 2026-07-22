@@ -1,7 +1,5 @@
 import json
 import logging
-import ollama
-import random
 import zoneinfo
 
 # from tavily import TavilyClient
@@ -16,7 +14,7 @@ from core.agent import get_model
 from db.mongo import get_mongo_database
 from db.qdrant import get_qdrant_database
 from schemas.agent import SessAgentState
-from schemas.mongo import Session
+from schemas.qdrant import QSession
 
 
 @tool
@@ -201,16 +199,19 @@ async def find_related_sessions(
         limit: This is the limit for the number of sessions to retrieve it might retrieve lower than the limit if few document pass the threshold (this defaults to 2)
         summarize_chat: This indicates whether to summarize the retrieved chats if the number of retrieved chat is high (limit >= 2 then it should be True) (this defaults to True)
     """
-    result = await get_qdrant_database().get_related_points(
+    err, result = await get_qdrant_database().get_related_points(
         state["session_uid"], query, score_threshold, use_query, limit
     )
 
-    if result is None:
-        return "Unable to get related sessions "
+    if err:
+        return "An error occured while trying to get related sessions."
+
+    if not result:
+        return "No related session available"
 
     avg_score = result[1]
 
-    sessions: list[Session] = []
+    sessions: list[QSession] = []
 
     for session, _ in result[0]:
         sessions.append(session)

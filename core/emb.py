@@ -36,8 +36,8 @@ EMB_MODEL: Optional[EmbeddingModel] = None
 
 
 def create_emb_model(emb_model: OllamaEmbeddings, model: Model) -> EmbeddingModel:
-    emb_model = EmbeddingModel(emb_model, model)
-    return emb_model
+    new_model = EmbeddingModel(emb_model, model)
+    return new_model
 
 
 def get_emb_model() -> EmbeddingModel:

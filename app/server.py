@@ -90,7 +90,7 @@ async def stream_chat(
                     )
                     return JSONResponse(status_code=err.code, content=err.message)
 
-                qdrant_updated = await qdb.update_point()
+                qdrant_updated = await qdb.update_point(input["session_id"], message)
 
                 if not qdrant_updated:
                     logging.error(

@@ -15,6 +15,10 @@ class CreateProject(BaseModel):
     goal: str
 
 
+class AddSession(BaseModel):
+    ids: list[str]
+
+
 class SimilarSessions(BaseModel):
     uid: str
     threshold: float

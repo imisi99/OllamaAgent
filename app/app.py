@@ -13,7 +13,6 @@ from streamlit_float import float_init
 from streamlit.elements.widgets.chat import ChatInputValue
 from streamlit.runtime.uploaded_file_manager import UploadedFile
 
-
 # TODO:
 # Add a model picker for the app
 # Add the audio functionality use a STT
@@ -145,9 +144,11 @@ def user_profile():
                                 else:
                                     resp = rename_user.json()
                                     st.toast(
-                                        resp["msg"]
-                                        if "msg" in resp
-                                        else resp["detail"],
+                                        (
+                                            resp["msg"]
+                                            if "msg" in resp
+                                            else resp["detail"]
+                                        ),
                                         duration=6,
                                     )
                             except Exception as e:
@@ -224,9 +225,11 @@ def user_profile():
                                         else:
                                             resp = update_req.json()
                                             st.toast(
-                                                resp["msg"]
-                                                if "msg" in resp
-                                                else resp["detail"],
+                                                (
+                                                    resp["msg"]
+                                                    if "msg" in resp
+                                                    else resp["detail"]
+                                                ),
                                                 duration=6,
                                             )
                                     except Exception as e:
@@ -256,9 +259,11 @@ def user_profile():
                                     else:
                                         resp = delete_req.json()
                                         st.toast(
-                                            resp["msg"]
-                                            if "msg" in resp
-                                            else resp["detail"],
+                                            (
+                                                resp["msg"]
+                                                if "msg" in resp
+                                                else resp["detail"]
+                                            ),
                                             duration=6,
                                         )
 
@@ -295,9 +300,11 @@ def user_profile():
                                 else:
                                     resp = add_mem_req.json()
                                     st.toast(
-                                        resp["msg"]
-                                        if "msg" in resp
-                                        else resp["detail"],
+                                        (
+                                            resp["msg"]
+                                            if "msg" in resp
+                                            else resp["detail"]
+                                        ),
                                         duration=6,
                                     )
 
@@ -465,9 +472,11 @@ def display_session_actions():
                                                 st.rerun()
                                             else:
                                                 st.toast(
-                                                    resp["msg"]
-                                                    if "msg" in resp
-                                                    else resp["detail"],
+                                                    (
+                                                        resp["msg"]
+                                                        if "msg" in resp
+                                                        else resp["detail"]
+                                                    ),
                                                     duration=7,
                                                 )
                                         except Exception as e:
@@ -543,9 +552,11 @@ def get_or_create_user():
                                 else:
                                     resp = new_user_req.json()
                                     st.toast(
-                                        resp["msg"]
-                                        if "msg" in resp
-                                        else resp["detail"],
+                                        (
+                                            resp["msg"]
+                                            if "msg" in resp
+                                            else resp["detail"]
+                                        ),
                                         duration=6,
                                     )
                             except Exception as e:
@@ -588,6 +599,153 @@ def session_sidebar():
             st.session_state.show_header = True
             st.session_state.messages = []
             st.rerun()
+
+        if st.button("Projects", type="primary"):
+
+            @st.dialog("Projects")
+            def projects():
+                if "projects" not in st.session_state:
+                    with st.spinner():
+                        try:
+                            projects_req = requests.get(
+                                url=f"{API_URL}/session/projects"
+                            )
+
+                            match projects_req.status_code:
+                                case 404:
+                                    st.info("You have no existing poject create one")
+                                case 200:
+                                    st.session_state.projects = projects_req.json()[
+                                        "projects"
+                                    ]
+                                case _:
+                                    resp = projects_req.json()
+                                    st.toast(
+                                        (
+                                            resp["msg"]
+                                            if "msg" in resp
+                                            else resp["detail"]
+                                        ),
+                                        duration=6,
+                                    )
+
+                        except Exception as e:
+                            logging.error(
+                                f"Failed to complete request to the server -> {e}"
+                            )
+                            st.error(
+                                "Failed to view projects \n couldn't communicate with the server."
+                            )
+
+            @st.dialog("Create Project")
+            def create_project():
+                name = st.text_input("Project name")
+                goal = st.text_input("Project goal")
+
+                # TODO: Maybe add a view sessions ? search session by name to add to the project when created
+
+                if st.button("create project"):
+                    with st.spinner():
+                        try:
+                            project_req = requests.post(
+                                url=f"{API_URL}/session/projects/create",
+                                json={
+                                    "name": name,
+                                    "goal": goal,
+                                },
+                            )
+
+                            match project_req.status_code:
+                                case 201:
+                                    st.toast("project created successfully")
+                                    st.session_state.project_id = project_req.json()[
+                                        "id"
+                                    ]
+                                case _:
+                                    resp = project_req.json()
+                                    st.toast(
+                                        (
+                                            resp["msg"]
+                                            if "msg" in resp
+                                            else resp["detail"]
+                                        ),
+                                        duration=6,
+                                    )
+
+                        except Exception as e:
+                            logging.error(
+                                f"Failed to complete request to the server -> {e}"
+                            )
+                            st.error(
+                                "Failed to create new project \n couldn't communicate with the server."
+                            )
+
+            @st.dialog("Add Session")
+            def add_session_to_project():
+                # TODO: Add the sessions ? how when element ?
+                ids = []
+                if st.button("add sessions"):
+                    with st.spinner():
+                        try:
+                            project_req = requests.put(
+                                url=f"{API_URL}/session/project/add/{st.session_state.project_id}",
+                                json={"ids": ids},
+                            )
+
+                            match project_req.status_code:
+                                case 202:
+                                    st.toast("sessions added successfully")
+                                case _:
+                                    resp = project_req.json()
+                                    st.toast(
+                                        (
+                                            resp["msg"]
+                                            if "msg" in resp
+                                            else resp["detail"]
+                                        ),
+                                        duration=6,
+                                    )
+
+                        except Exception as e:
+                            logging.error(
+                                f"Failed to complete request to the server -> {e}"
+                            )
+                            st.error(
+                                "Failed to add session project \n couldn't communicate with the server."
+                            )
+
+            @st.dialog("Remove Session")
+            def remove_session_from_project:
+            # TODO: Fetch sessions currently in project
+            if st.button("remove sessions"):
+                    with st.spinner():
+                        try:
+                            project_req = requests.put(
+                                url=f"{API_URL}/session/projects/{st.session_state.project_id}",
+                                json={"ids": ids},
+                            )
+
+                            match project_req.status_code:
+                                case 202:
+                                    st.toast("sessions added successfully")
+                                case _:
+                                    resp = project_req.json()
+                                    st.toast(
+                                        (
+                                            resp["msg"]
+                                            if "msg" in resp
+                                            else resp["detail"]
+                                        ),
+                                        duration=6,
+                                    )
+
+                        except Exception as e:
+                            logging.error(
+                                f"Failed to complete request to the server -> {e}"
+                            )
+                            st.error(
+                                "Failed to add session project \n couldn't communicate with the server."
+                            )
 
         if "sessions_fetched" not in st.session_state or st.session_state.get(
             "update_view"

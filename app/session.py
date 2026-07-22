@@ -12,7 +12,7 @@ from core.qdrant import Job, Qdrant, Task
 from db.mongo import get_mongo_database
 from db.qdrant import get_qdrant_database
 from schemas.mongo import Message, Project, Session
-from schemas.session import CreateProject, CreateSession, SimilarSessions
+from schemas.session import AddSession, CreateProject, CreateSession, SimilarSessions
 
 session = APIRouter()
 
@@ -302,7 +302,7 @@ def get_projects(db: Database = Depends(get_mongo_database)):
         if len(projects) == 0:
             return JSONResponse(
                 content={"msg": "No project found."},
-                status_code=status.HTTP_401_UNAUTHORIZED,
+                status_code=status.HTTP_404_NOT_FOUND,
             )
 
         return JSONResponse(
@@ -336,12 +336,12 @@ def get_project(project_id: str, db: Database = Depends(get_mongo_database)):
         )
 
 
-@session.put("/session/projects/{session_id}/{project_id}")
+@session.put("/session/project/add/{project_id}")
 def add_to_project(
-    session_id: str, project_id: str, db: Database = Depends(get_mongo_database)
+    session: AddSession, project_id: str, db: Database = Depends(get_mongo_database)
 ):
     try:
-        err = db.add_session_to_project(session_id, project_id)
+        err = db.add_session_to_project(session.ids, project_id)
 
         if err:
             return JSONResponse(content=err.message, status_code=err.code)
@@ -359,9 +359,9 @@ def add_to_project(
         )
 
 
-@session.delete("/session/project/remove/{session_id}/{project_id}")
+@session.delete("/session/project/remove/{project_id}")
 def remove_from_project(
-    session_id: str, project_id: str, db: Database = Depends(get_mongo_database)
+    session: Add, project_id: str, db: Database = Depends(get_mongo_database)
 ):
     try:
         err = db.remove_session_from_project(session_id, project_id)
