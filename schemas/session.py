@@ -15,7 +15,7 @@ class CreateProject(BaseModel):
     goal: str
 
 
-class AddSession(BaseModel):
+class UpdateProjectSession(BaseModel):
     ids: list[str]
 
 

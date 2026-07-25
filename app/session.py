@@ -12,7 +12,12 @@ from core.qdrant import Job, Qdrant, Task
 from db.mongo import get_mongo_database
 from db.qdrant import get_qdrant_database
 from schemas.mongo import Message, Project, Session
-from schemas.session import AddSession, CreateProject, CreateSession, SimilarSessions
+from schemas.session import (
+    CreateProject,
+    CreateSession,
+    SimilarSessions,
+    UpdateProjectSession,
+)
 
 session = APIRouter()
 
@@ -338,7 +343,9 @@ def get_project(project_id: str, db: Database = Depends(get_mongo_database)):
 
 @session.put("/session/project/add/{project_id}")
 def add_to_project(
-    session: AddSession, project_id: str, db: Database = Depends(get_mongo_database)
+    session: UpdateProjectSession,
+    project_id: str,
+    db: Database = Depends(get_mongo_database),
 ):
     try:
         err = db.add_session_to_project(session.ids, project_id)
@@ -361,10 +368,12 @@ def add_to_project(
 
 @session.delete("/session/project/remove/{project_id}")
 def remove_from_project(
-    session: Add, project_id: str, db: Database = Depends(get_mongo_database)
+    session: UpdateProjectSession,
+    project_id: str,
+    db: Database = Depends(get_mongo_database),
 ):
     try:
-        err = db.remove_session_from_project(session_id, project_id)
+        err = db.remove_session_from_project(session.ids, project_id)
 
         if err:
             return JSONResponse(content=err.message, status_code=err.code)

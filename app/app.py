@@ -711,23 +711,24 @@ def session_sidebar():
                                 f"Failed to complete request to the server -> {e}"
                             )
                             st.error(
-                                "Failed to add session project \n couldn't communicate with the server."
+                                "Failed to add sessions to project \n couldn't communicate with the server."
                             )
 
             @st.dialog("Remove Session")
-            def remove_session_from_project:
-            # TODO: Fetch sessions currently in project
-            if st.button("remove sessions"):
+            def remove_session_from_project():
+                # TODO: Fetch sessions currently in project
+                ids = []
+                if st.button("remove sessions"):
                     with st.spinner():
                         try:
-                            project_req = requests.put(
-                                url=f"{API_URL}/session/projects/{st.session_state.project_id}",
+                            project_req = requests.delete(
+                                url=f"{API_URL}/session/project/remove/{st.session_state.project_id}",
                                 json={"ids": ids},
                             )
 
                             match project_req.status_code:
                                 case 202:
-                                    st.toast("sessions added successfully")
+                                    st.toast("sessions removed successfully")
                                 case _:
                                     resp = project_req.json()
                                     st.toast(
@@ -744,7 +745,45 @@ def session_sidebar():
                                 f"Failed to complete request to the server -> {e}"
                             )
                             st.error(
-                                "Failed to add session project \n couldn't communicate with the server."
+                                "Failed to remove sessions from project \n couldn't communicate with the server."
+                            )
+
+            @st.dialog("Delete Project")
+            def delete_project():
+                st.popover(
+                    "Deleting this will remove all the sessions from this project!"
+                )
+                project_name = st.text_input("Enter the project name.")
+                if (
+                    st.button("delete project")
+                    and project_name == st.session_state.project_name
+                ):
+                    with st.spinner():
+                        try:
+                            project_req = requests.delete(
+                                url=f"{API_URL}/session/project/delete/{st.session_state.project_id}",
+                            )
+
+                            match project_req.status_code:
+                                case 204:
+                                    st.toast("project deleted successfully")
+                                case _:
+                                    resp = project_req.json()
+                                    st.toast(
+                                        (
+                                            resp["msg"]
+                                            if "msg" in resp
+                                            else resp["detail"]
+                                        ),
+                                        duration=6,
+                                    )
+
+                        except Exception as e:
+                            logging.error(
+                                f"Failed to complete request to the server -> {e}"
+                            )
+                            st.error(
+                                "Failed to remove delete project \n couldn't communicate with the server."
                             )
 
         if "sessions_fetched" not in st.session_state or st.session_state.get(

@@ -297,22 +297,29 @@ class Database:
                 failed_session = True
 
         if failed_session:
-            return CustomError(message="Session deosn't exist.", code=404)
+            return CustomError(message="A session deosn't exist.", code=404)
 
     def remove_session_from_project(
-        self, session_id: str, project_id: str
+        self, session_id: list[str], project_id: str
     ) -> CustomError | None:
         project = self.project_collection.find_one({"_id": ObjectId(project_id)})
 
         if not project:
             return CustomError(message="Project doesn't exist.", code=404)
 
-        session = self.session_collection.find_one_and_update(
-            filter={"_id": ObjectId(session_id)}, update={"$set": {"project_id": ""}}
-        )
+        failed_session = False
 
-        if not session:
-            return CustomError(message="Session deosn't exist.", code=404)
+        for sess_id in session_id:
+            session = self.session_collection.find_one_and_update(
+                filter={"_id": ObjectId(sess_id)},
+                update={"$set": {"project_id": ""}},
+            )
+
+            if not session:
+                failed_session = True
+
+        if failed_session:
+            return CustomError(message="A session deosn't exist.", code=404)
 
     def rename_session(self, session_id: str, name: str) -> CustomError | None:
         result = self.session_collection.update_one(
