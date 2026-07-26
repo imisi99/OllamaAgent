@@ -2,9 +2,8 @@ import base64
 from datetime import datetime
 from typing import Any, cast
 from bson import ObjectId
-from pandas.compat import F
 from pymongo import MongoClient
-from conf import CustomError
+from core.conf import CustomError
 from schemas.mongo import Audio, File, Image, Message, Session, User, Project
 
 

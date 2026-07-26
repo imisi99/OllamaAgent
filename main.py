@@ -100,15 +100,21 @@ async def lifespan(app: FastAPI):
         f"{base_url}/api/embeddings",
         json={"model": "nomic-embed-text", "keep_alive": 0},
     )
-    await (
-        qdrant.QDRANT_DATABASE.finish_queue()
-    ) if qdrant.QDRANT_DATABASE is not None else None
+    (
+        await qdrant.QDRANT_DATABASE.finish_queue()
+        if qdrant.QDRANT_DATABASE is not None
+        else None
+    )
     worker.cancel()
     try:
         await worker
     except asyncio.CancelledError:
         pass
-    redis.REDIS_DATABASE.clear_all_memory() if redis.REDIS_DATABASE is not None else None
+    (
+        redis.REDIS_DATABASE.clear_all_memory()
+        if redis.REDIS_DATABASE is not None
+        else None
+    )
     qdrant.QDRANT_CLIENT.close() if qdrant.QDRANT_CLIENT is not None else None
     mongo.MONGO_CLIENT.close() if mongo.MONGO_CLIENT is not None else None
     redis.REDIS_CLIENT.close() if redis.REDIS_CLIENT is not None else None

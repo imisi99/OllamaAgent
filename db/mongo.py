@@ -5,13 +5,14 @@ from pymongo import MongoClient
 from core.mongo import Database
 from schemas.mongo import Session
 
-
 MONGO_CLIENT: Optional[MongoClient[Dict[str, Any]]] = None
 MONGO_HOST = os.getenv("MONGO_HOST")
 MONGO_PORT = os.getenv("MONGO_PORT")
 DB_NAME = "agent"
 SESSISON = "sessions"
 USER = "user"
+PROJECT = "projects"
+MESSAGE = "messages"
 MONGO_DATABASE: Optional[Database] = None
 
 
@@ -33,7 +34,7 @@ def get_mongo_client() -> MongoClient[Dict[str, Any]]:
 
 
 def create_mongo_database() -> Database:
-    database = Database(DB_NAME, SESSISON, USER, get_mongo_client())
+    database = Database(DB_NAME, SESSISON, USER, MESSAGE, PROJECT, get_mongo_client())
     return database
 
 

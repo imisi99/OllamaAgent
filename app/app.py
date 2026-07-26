@@ -589,21 +589,10 @@ def get_or_create_user():
 
 def session_sidebar():
     with st.sidebar:
-        if st.button(
-            "New Chat",
-            icon=":material/add:",
-            type="tertiary",
-        ):
-            st.session_state.session_id = ""
-            st.session_state.session_uid = ""
-            st.session_state.show_header = True
-            st.session_state.messages = []
-            st.rerun()
-
-        if st.button("Projects", type="primary"):
+        with st.expander("Projects"):
 
             @st.dialog("Projects")
-            def projects():
+            def view_projects():
                 if "projects" not in st.session_state:
                     with st.spinner():
                         try:
@@ -785,6 +774,22 @@ def session_sidebar():
                             st.error(
                                 "Failed to remove delete project \n couldn't communicate with the server."
                             )
+
+            if st.button("view projects"):
+                view_projects()
+            if st.button("create project"):
+                create_project()
+
+        if st.button(
+            "New Chat",
+            icon=":material/add:",
+            type="tertiary",
+        ):
+            st.session_state.session_id = ""
+            st.session_state.session_uid = ""
+            st.session_state.show_header = True
+            st.session_state.messages = []
+            st.rerun()
 
         if "sessions_fetched" not in st.session_state or st.session_state.get(
             "update_view"

@@ -15,7 +15,7 @@ from qdrant_client.models import (
 from qdrant_client.http.models import UpdateStatus
 
 from core.conf import CustomError
-from emb import EmbeddingModel
+from core.emb import EmbeddingModel
 from schemas.mongo import Message, Session
 from schemas.qdrant import QSession
 
