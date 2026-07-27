@@ -275,7 +275,7 @@ async def fetch_similar_sessions(
         )
 
 
-@session.post("/session/projects/create")
+@session.post("/session/project/create")
 def create_project(payload: CreateProject, db: Database = Depends(get_mongo_database)):
     try:
         project: Project = {
@@ -299,7 +299,7 @@ def create_project(payload: CreateProject, db: Database = Depends(get_mongo_data
         )
 
 
-@session.get("/session/projects/")
+@session.get("/session/project/all")
 def get_projects(db: Database = Depends(get_mongo_database)):
     try:
         projects = db.fetch_projects()

@@ -597,7 +597,7 @@ def session_sidebar():
                     with st.spinner():
                         try:
                             projects_req = requests.get(
-                                url=f"{API_URL}/session/projects"
+                                url=f"{API_URL}/session/project/all"
                             )
 
                             match projects_req.status_code:
