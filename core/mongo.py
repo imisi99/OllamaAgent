@@ -1,5 +1,6 @@
 import base64
 from datetime import datetime
+import logging
 from typing import Any, cast
 from bson import ObjectId
 from pymongo import MongoClient
@@ -136,6 +137,7 @@ class Database:
         with self.message_collection.find(
             filter={"session_id": session_id},
             projection={
+                "_id": False,
                 "thought": False,
                 "files": False,
                 "timestamp": False,
@@ -227,9 +229,7 @@ class Database:
             filter={},
             projection={
                 "created_at": False,
-                "messages.thought": False,
-                "messages.files": False,
-                "messages.timestamp": False,
+                "last_edited": False,
             },
         ) as cursor:
             sessions = list(cursor)
@@ -237,12 +237,14 @@ class Database:
         result: list[tuple[Session, list[Message]]] = []
         for session in sessions:
             session["_id"] = str(session["_id"])
-            session["created_at"] = self.denormalize_timestamp(session["created_at"])
-            session["last_edited"] = self.denormalize_timestamp(session["last_edited"])
+            session["created_at"] = ""
+            session["last_edited"] = ""
 
             result.append(
                 (cast(Session, session), self.fetch_message_for_redis(session["_id"]))
             )
+
+        logging.info(result)
 
         return result
 
