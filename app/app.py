@@ -593,7 +593,9 @@ def session_sidebar():
 
             @st.dialog("Projects")
             def view_projects():
-                if "projects" not in st.session_state:
+                if "projects" not in st.session_state or st.session_state.get(
+                    "update_project_view"
+                ):
                     with st.spinner():
                         try:
                             projects_req = requests.get(
@@ -607,6 +609,7 @@ def session_sidebar():
                                     st.session_state.projects = projects_req.json()[
                                         "projects"
                                     ]
+                                    st.session_state.update_project_view = False
                                 case _:
                                     resp = projects_req.json()
                                     st.toast(
@@ -626,6 +629,42 @@ def session_sidebar():
                                 "Failed to view projects \n couldn't communicate with the server."
                             )
 
+                for project in st.session_state.projects:
+                    with st.expander(project["name"]):
+                        st.write(project["goal"])
+                        if st.button("open", key=project["_id"]):
+                            pass
+
+            @st.dialog("Project")
+            def view_project():
+                with st.spinner():
+                    try:
+                        project_req = requests.get(
+                            url=f"{API_URL}/session/project/{st.session_state.project_id}"
+                        )
+
+                        match project_req.status_code:
+                            case 404:
+                                st.info("This project doesn't exist")
+                            case 200:
+                                project, st.session_state.project_session = (
+                                    project_req.json()["project"],
+                                    project_req.json()["sessions"],
+                                )
+                            case _:
+                                resp = project_req.json()
+                                st.toast(
+                                    (resp["msg"] if "msg" in resp else resp["detail"]),
+                                    duration=6,
+                                )
+                    except Exception as e:
+                        logging.error(
+                            f"Failed to complete request to the server -> {e}"
+                        )
+                        st.error(
+                            "Failed to view project \n couldn't communicate with the server."
+                        )
+
             @st.dialog("Create Project")
             def create_project():
                 name = st.text_input("Project name")
@@ -637,7 +676,7 @@ def session_sidebar():
                     with st.spinner():
                         try:
                             project_req = requests.post(
-                                url=f"{API_URL}/session/projects/create",
+                                url=f"{API_URL}/session/project/create",
                                 json={
                                     "name": name,
                                     "goal": goal,
@@ -650,6 +689,8 @@ def session_sidebar():
                                     st.session_state.project_id = project_req.json()[
                                         "id"
                                     ]
+                                    st.session_state.update_project_view = True
+                                    st.rerun()
                                 case _:
                                     resp = project_req.json()
                                     st.toast(
