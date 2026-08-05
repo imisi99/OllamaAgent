@@ -631,39 +631,62 @@ def session_sidebar():
 
                 for project in st.session_state.projects:
                     with st.expander(project["name"]):
-                        st.write(project["goal"])
-                        if st.button("open", key=project["_id"]):
-                            pass
+                        goal, open_sess = st.columns(
+                            [4, 1], vertical_alignment="center"
+                        )
+                        goal.write(project["goal"])
+                        if open_sess.button(
+                            "view",
+                            key=project["_id"],
+                            type="primary",
+                            use_container_width=True,
+                        ):
+                            st.session_state.project_id = project["_id"]
+                            st.session_state.view_project_dialog = True
 
             @st.dialog("Project")
             def view_project():
-                with st.spinner():
-                    try:
-                        project_req = requests.get(
-                            url=f"{API_URL}/session/project/{st.session_state.project_id}"
-                        )
+                if (
+                    st.session_state.curr_project != st.session_state.project_id
+                    or "project_session" not in st.session_state
+                ):
+                    with st.spinner():
+                        try:
+                            project_req = requests.get(
+                                url=f"{API_URL}/session/project/{st.session_state.project_id}"
+                            )
 
-                        match project_req.status_code:
-                            case 404:
-                                st.info("This project doesn't exist")
-                            case 200:
-                                project, st.session_state.project_session = (
-                                    project_req.json()["project"],
-                                    project_req.json()["sessions"],
-                                )
-                            case _:
-                                resp = project_req.json()
-                                st.toast(
-                                    (resp["msg"] if "msg" in resp else resp["detail"]),
-                                    duration=6,
-                                )
-                    except Exception as e:
-                        logging.error(
-                            f"Failed to complete request to the server -> {e}"
-                        )
-                        st.error(
-                            "Failed to view project \n couldn't communicate with the server."
-                        )
+                            match project_req.status_code:
+                                case 404:
+                                    st.info("This project doesn't exist")
+                                case 200:
+                                    (
+                                        st.session_state.curr_project,
+                                        st.session_state.project_session,
+                                    ) = (
+                                        project_req.json()["project"],
+                                        project_req.json()["sessions"],
+                                    )
+                                case _:
+                                    resp = project_req.json()
+                                    st.toast(
+                                        (
+                                            resp["msg"]
+                                            if "msg" in resp
+                                            else resp["detail"]
+                                        ),
+                                        duration=6,
+                                    )
+                        except Exception as e:
+                            logging.error(
+                                f"Failed to complete request to the server -> {e}"
+                            )
+                            st.error(
+                                "Failed to view project \n couldn't communicate with the server."
+                            )
+
+                for session in st.session_state.project_session:
+                    w
 
             @st.dialog("Create Project")
             def create_project():
