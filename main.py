@@ -12,10 +12,10 @@ from core.tools import tools
 from core.prompt import system_prompt
 from db import mongo, qdrant, redis
 from core import agent, emb
-from app.server import serve
-from app.session import session
-from app.user import user
-from app.audio import audio_router
+from api.server import serve
+from api.session import session
+from api.user import user
+from api.audio import audio_router
 
 logging.basicConfig(level=logging.INFO)
 

@@ -266,6 +266,9 @@ class Database:
             session["created_at"] = self.denormalize_timestamp(session["created_at"])
             session["last_edited"] = self.denormalize_timestamp(session["last_edited"])
 
+        project["_id"] = str(project["_id"])
+        project["created_at"] = self.denormalize_timestamp(project["created_at"])
+
         return None, cast(Project, project), cast(list[Session], sessions)
 
     def fetch_projects(self) -> list[Project]:

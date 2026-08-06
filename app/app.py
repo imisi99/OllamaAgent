@@ -8,6 +8,17 @@ import httpx
 import requests
 import streamlit as st
 
+from .session import rename_sess, delete_sess, find_similar_sess
+from .user import rename_user, user_memory, add_memory
+from .project import (
+    view_project,
+    view_projects,
+    remove_session_from_project,
+    add_session_to_project,
+    delete_project,
+    create_project,
+)
+
 
 from streamlit_float import float_init
 from streamlit.elements.widgets.chat import ChatInputValue
@@ -120,402 +131,56 @@ def header():
 
 def user_profile():
     with st.sidebar:
-        with st.expander(st.session_state.user_name, width=300):
+        if st.button(st.session_state.user_name, use_container_width=True):
 
-            @st.dialog("Change your username")
-            def rename_user():
-                new_name = st.text_input("Enter New Username")
-                if st.button("Confirm", key="confirm_user_rename"):
-                    if new_name:
-                        with st.spinner():
-                            try:
-                                rename_user = requests.put(
-                                    url=f"{API_URL}/user/"
-                                    + st.session_state.user_id
-                                    + "/update/"
-                                    + new_name.strip()
-                                )
-                                if rename_user.status_code == 202:
-                                    st.toast("Username updated successfully.")
-                                    st.session_state.user_name = new_name.strip()
-                                    time.sleep(0.5)
-                                    st.rerun()
+            @st.dialog("View Settings")
+            def view_settings():
+                if st.button("Rename", use_container_width=True):
+                    st.session_state.active_dialog = "rename_user"
+                    st.rerun()
+                if st.button("Memory", use_container_width=True):
+                    st.session_state.active_dialog = "user_memory"
+                    st.rerun()
+                if st.button("Add", use_container_width=True):
+                    st.session_state.active_dialog = "add_memory"
+                    st.rerun()
 
-                                else:
-                                    resp = rename_user.json()
-                                    st.toast(
-                                        (
-                                            resp["msg"]
-                                            if "msg" in resp
-                                            else resp["detail"]
-                                        ),
-                                        duration=6,
-                                    )
-                            except Exception as e:
-                                logging.error(
-                                    f"Failed to complete request to the server -> {e}"
-                                )
-                                st.error(
-                                    "Failed to change username \n couldn't communicate with the server."
-                                )
+            view_settings()
 
-            @st.dialog("View Memory")
-            def user_memory():
-                if "user_memory" not in st.session_state:
-                    st.session_state.user_memory = {}
-
-                with st.spinner():
-                    try:
-                        memory_req = requests.get(
-                            url=f"{API_URL}/user/me/" + st.session_state.user_id
-                        )
-
-                        if memory_req.status_code == 404:
-                            st.toast("Unable to find user.")
-
-                        elif memory_req.status_code == 200:
-                            st.session_state.user_memory = memory_req.json()["user"][
-                                "memory"
-                            ]
-
-                        else:
-                            resp = memory_req.json()
-                            st.toast(
-                                resp["msg"] if "msg" in resp else resp["detail"],
-                                duration=6,
-                            )
-
-                    except Exception as e:
-                        logging.error(
-                            f"Failed to complete request to the server -> {e}"
-                        )
-                        st.error(
-                            "Failed to fetch memory \n couldn't communicate with the server."
-                        )
-
-                for key, value in st.session_state.user_memory.items():
-                    col1, col2, col3 = st.columns([0.6, 0.30, 0.20])
-                    with col1:
-                        with st.popover(key):
-                            st.markdown(value)
-                    with col2:
-                        with st.popover("Update"):
-                            newValue = st.text_input(
-                                label="Nil", value=value, label_visibility="hidden"
-                            )
-                            if st.button("Confirm") and newValue:
-                                with st.spinner():
-                                    try:
-                                        update_req = requests.put(
-                                            url=f"{API_URL}/user/"
-                                            + st.session_state.user_id
-                                            + "/update/memory",
-                                            json={
-                                                "key": key,
-                                                "value": newValue,
-                                            },
-                                        )
-
-                                        if update_req.status_code == 202:
-                                            st.toast("Memory updated successfully.")
-                                            st.session_state.user_memory[key] = value
-                                            time.sleep(0.5)
-                                            st.rerun()
-
-                                        else:
-                                            resp = update_req.json()
-                                            st.toast(
-                                                (
-                                                    resp["msg"]
-                                                    if "msg" in resp
-                                                    else resp["detail"]
-                                                ),
-                                                duration=6,
-                                            )
-                                    except Exception as e:
-                                        logging.error(
-                                            f"Failed to complete request to the server -> {e}"
-                                        )
-                                        st.error(
-                                            "Failed to update memory \n couldn't communicate with the server."
-                                        )
-                    with col3:
-                        if st.button("Delete"):
-                            with st.spinner():
-                                try:
-                                    delete_req = requests.delete(
-                                        url=f"{API_URL}/user/"
-                                        + st.session_state.user_id
-                                        + "/delete/memory/"
-                                        + key
-                                    )
-
-                                    if delete_req.status_code == 202:
-                                        st.toast("Memory deleted successfully.")
-                                        st.session_state.user_memory.pop(key)
-                                        time.sleep(0.5)
-                                        st.rerun()
-
-                                    else:
-                                        resp = delete_req.json()
-                                        st.toast(
-                                            (
-                                                resp["msg"]
-                                                if "msg" in resp
-                                                else resp["detail"]
-                                            ),
-                                            duration=6,
-                                        )
-
-                                except Exception as e:
-                                    logging.error(
-                                        f"Failed to complete request to the server -> {e}"
-                                    )
-                                    st.error(
-                                        "Failed to delete memory \n couldn't communicate with the server."
-                                    )
-
-            @st.dialog("Add a memory")
-            def add_memory():
-                key = st.text_input("Enter the key")
-                value = st.text_input("Enter the value")
-
-                if st.button("Add Memory"):
-                    if key and value:
-                        with st.spinner():
-                            try:
-                                add_mem_req = requests.put(
-                                    url=f"{API_URL}/user/"
-                                    + st.session_state.user_id
-                                    + "/update/memory",
-                                    json={"key": key, "value": value},
-                                )
-
-                                if add_mem_req.status_code == 202:
-                                    st.toast("Memory added successfully.")
-                                    st.session_state.user_memory[key] = value
-                                    time.sleep(0.5)
-                                    st.rerun()
-
-                                else:
-                                    resp = add_mem_req.json()
-                                    st.toast(
-                                        (
-                                            resp["msg"]
-                                            if "msg" in resp
-                                            else resp["detail"]
-                                        ),
-                                        duration=6,
-                                    )
-
-                            except Exception as e:
-                                logging.error(
-                                    f"Failed to complete request to the server -> {e}"
-                                )
-                                st.error(
-                                    "Failed to create memory \n couldn't communicate with the server."
-                                )
-
-            if st.button("Rename"):
-                rename_user()
-
-            memCol, addCol = st.columns(2)
-
-            with memCol:
-                if st.button("Memory"):
+            match st.session_state.active_dialog:
+                case "rename_user":
+                    rename_user()
+                case "user_memory":
                     user_memory()
-
-            with addCol:
-                if st.button("Add"):
+                case "add_memory":
                     add_memory()
 
 
 def display_session_actions():
     if not st.session_state.ghost_session and not st.session_state.show_header:
 
-        @st.dialog("Rename Session")
-        def rename_sess():
-            new_name = st.text_input(
-                "Enter New Name", value=st.session_state.session_name
-            )
-            if st.button("Confirm", key="confirm_rename"):
-                if new_name:
-                    with st.spinner():
-                        try:
-                            rename_req = requests.put(
-                                url=f"{API_URL}/session/rename/"
-                                + st.session_state.session_id
-                                + "/"
-                                + st.session_state.session_uid
-                                + "?name="
-                                + new_name
-                            )
+        name = (
+            "Untitled"
+            if "session_name" not in st.session_state
+            else st.session_state.session_name
+        )
 
-                            if rename_req.status_code == 202:
-                                st.toast("Session renamed successfully.")
-                                st.session_state.session_name = new_name
-                                st.session_state.update_view = True
-                                time.sleep(0.5)
-                                st.rerun()
-                            else:
-                                resp = rename_req.json()
-                                st.toast(
-                                    resp["msg"] if "msg" in resp else resp["detail"],
-                                    duration=6,
-                                )
-
-                        except Exception as e:
-                            logging.error(
-                                f"Failed to complete request to the server -> {e}"
-                            )
-                            st.error(
-                                "Failed to rename session \n couldn't communicate with the server."
-                            )
-
-        @st.dialog("Delete Session")
-        def delete_sess():
-            if st.button("Confirm", key="confirm_delete"):
-                with st.spinner():
-                    try:
-                        delete_req = requests.delete(
-                            url=f"{API_URL}/session/delete/"
-                            + st.session_state.session_id
-                            + "/"
-                            + st.session_state.session_uid,
-                        )
-
-                        if delete_req.status_code == 200:
-                            st.toast("Session deleted successfully")
-                            st.session_state.update_view = True
-                            remove_active_session_from_sessions()
-                            st.session_state.session_id = ""
-                            st.session_state.session_uid = ""
-                            st.session_state.messages = []
-                            st.session_state.session_name = ""
-                            st.session_state.show_header = True
-                            time.sleep(0.5)
-                            st.rerun()
-                        else:
-                            resp = delete_req.json()
-                            st.toast(
-                                resp["msg"] if "msg" in resp else resp["detail"],
-                                duration=6,
-                            )
-
-                    except Exception as e:
-                        logging.error(
-                            f"Failed to complete request to the server -> {e}"
-                        )
-                        st.error(
-                            "Failed to delete session \n couldn't communicate with the server."
-                        )
-
-        @st.dialog("Find Similar Sessions")
-        def find_similar_sess():
-            threshold = st.number_input(
-                "Enter threshold", min_value=0.0, max_value=1.0, value=0.5
-            )
-            limit = st.number_input("Enter limit", min_value=1, max_value=100, value=5)
-            if st.button("Find Sessions") or st.session_state.get("find_session"):
-                st.session_state.find_session = True
-                with st.spinner("Finding sessions..."):
-                    try:
-                        similar_req = requests.get(
-                            url=f"{API_URL}/session/find/similar",
-                            json={
-                                "uid": st.session_state.session_uid,
-                                "threshold": threshold,
-                                "limit": limit,
-                            },
-                        )
-
-                        if similar_req.status_code == 200:
-                            sessions, avgScore = (
-                                similar_req.json()["sessions"],
-                                similar_req.json()["score"],
-                            )
-
-                            st.write(
-                                f" Retrieved {len(sessions)} sessions with an average score of -> {avgScore}"
-                            )
-
-                            similar_col1, similar_col2 = st.columns([0.8, 0.2])
-                            for sess in sessions:
-                                with similar_col1:
-                                    load_sess_id = sess[0]["_id"]
-                                    load_sess_uid = sess[0]["uuid"]
-                                    if st.button(sess[0]["name"]):
-                                        try:
-                                            message_req = requests.get(
-                                                url=f"{API_URL}/session/"
-                                                + load_sess_id,
-                                            )
-
-                                            resp = message_req.json()
-
-                                            if message_req.status_code == 200:
-                                                st.session_state.session_id = (
-                                                    load_sess_id
-                                                )
-                                                st.session_state.session_uid = (
-                                                    load_sess_uid
-                                                )
-                                                st.session_state.ghost_session = False
-                                                st.session_state.show_header = False
-                                                st.session_state.messages = resp[
-                                                    "session"
-                                                ]["messages"]
-                                                st.session_state.find_session = False
-                                                st.session_state.session_name = resp[
-                                                    "session"
-                                                ]["name"]
-                                                st.rerun()
-                                            else:
-                                                st.toast(
-                                                    (
-                                                        resp["msg"]
-                                                        if "msg" in resp
-                                                        else resp["detail"]
-                                                    ),
-                                                    duration=7,
-                                                )
-                                        except Exception as e:
-                                            st.toast("Unable to load the session.")
-                                            logging.error(
-                                                f"Failed to load session with id -> {load_sess_id}, err -> {e}"
-                                            )
-
-                                with similar_col2:
-                                    st.write(sess[1])
-
-                        else:
-                            st.session_state.find_session = False
-                            resp = similar_req.json()
-                            st.info(resp["msg"] if "msg" in resp else resp["detail"])
-                    except Exception as e:
-                        logging.error(
-                            f"Failed to complete request to the server -> {e}"
-                        )
-                        st.error(
-                            "Failed to find similar sessions, couldn't communicate with the server."
-                        )
-
-        name = ""
-        if st.session_state.session_id == "":
-            name = "Untitled"
-        else:
-            name = st.session_state.session_name
+        @st.dialog(name)
+        def sess_actions():
+            if st.button("Rename"):
+                st.session_state.active_dialog = "rename_sess"
+                st.rerun()
+            if st.button("Delete"):
+                st.session_state.active_dialog = "delete_sess"
+                st.rerun()
+            if st.button("Similar"):
+                st.session_state.active_dialog = "find_similar_sess"
+                st.rerun()
 
         session_actions = st.container()
 
         with session_actions:
-            with st.expander(label=name):
-                if st.button("Rename"):
-                    rename_sess()
-                if st.button("Delete"):
-                    delete_sess()
-                if st.button("Similar"):
-                    find_similar_sess()
+            sess_actions()
 
         session_actions.float(
             "top: 60px; background-color: rgba(38, 39, 48, 0.75); backdrop-filter: blur(8px); --webkit-backdrop-filter: blur(8px); z-index: 9999;"
@@ -591,258 +256,12 @@ def session_sidebar():
     with st.sidebar:
         with st.expander("Projects"):
 
-            @st.dialog("Projects")
-            def view_projects():
-                if "projects" not in st.session_state or st.session_state.get(
-                    "update_project_view"
-                ):
-                    with st.spinner():
-                        try:
-                            projects_req = requests.get(
-                                url=f"{API_URL}/session/project/all"
-                            )
-
-                            match projects_req.status_code:
-                                case 404:
-                                    st.info("You have no existing poject create one")
-                                case 200:
-                                    st.session_state.projects = projects_req.json()[
-                                        "projects"
-                                    ]
-                                    st.session_state.update_project_view = False
-                                case _:
-                                    resp = projects_req.json()
-                                    st.toast(
-                                        (
-                                            resp["msg"]
-                                            if "msg" in resp
-                                            else resp["detail"]
-                                        ),
-                                        duration=6,
-                                    )
-
-                        except Exception as e:
-                            logging.error(
-                                f"Failed to complete request to the server -> {e}"
-                            )
-                            st.error(
-                                "Failed to view projects \n couldn't communicate with the server."
-                            )
-
-                for project in st.session_state.projects:
-                    with st.expander(project["name"]):
-                        goal, open_sess = st.columns(
-                            [4, 1], vertical_alignment="center"
-                        )
-                        goal.write(project["goal"])
-                        if open_sess.button(
-                            "view",
-                            key=project["_id"],
-                            type="primary",
-                            use_container_width=True,
-                        ):
-                            st.session_state.project_id = project["_id"]
-                            st.session_state.view_project_dialog = True
-
-            @st.dialog("Project")
-            def view_project():
-                if (
-                    st.session_state.curr_project != st.session_state.project_id
-                    or "project_session" not in st.session_state
-                ):
-                    with st.spinner():
-                        try:
-                            project_req = requests.get(
-                                url=f"{API_URL}/session/project/{st.session_state.project_id}"
-                            )
-
-                            match project_req.status_code:
-                                case 404:
-                                    st.info("This project doesn't exist")
-                                case 200:
-                                    (
-                                        st.session_state.curr_project,
-                                        st.session_state.project_session,
-                                    ) = (
-                                        project_req.json()["project"],
-                                        project_req.json()["sessions"],
-                                    )
-                                case _:
-                                    resp = project_req.json()
-                                    st.toast(
-                                        (
-                                            resp["msg"]
-                                            if "msg" in resp
-                                            else resp["detail"]
-                                        ),
-                                        duration=6,
-                                    )
-                        except Exception as e:
-                            logging.error(
-                                f"Failed to complete request to the server -> {e}"
-                            )
-                            st.error(
-                                "Failed to view project \n couldn't communicate with the server."
-                            )
-
-                for session in st.session_state.project_session:
-                    w
-
-            @st.dialog("Create Project")
-            def create_project():
-                name = st.text_input("Project name")
-                goal = st.text_input("Project goal")
-
-                # TODO: Maybe add a view sessions ? search session by name to add to the project when created
-
-                if st.button("create project"):
-                    with st.spinner():
-                        try:
-                            project_req = requests.post(
-                                url=f"{API_URL}/session/project/create",
-                                json={
-                                    "name": name,
-                                    "goal": goal,
-                                },
-                            )
-
-                            match project_req.status_code:
-                                case 201:
-                                    st.toast("project created successfully")
-                                    st.session_state.project_id = project_req.json()[
-                                        "id"
-                                    ]
-                                    st.session_state.update_project_view = True
-                                    st.rerun()
-                                case _:
-                                    resp = project_req.json()
-                                    st.toast(
-                                        (
-                                            resp["msg"]
-                                            if "msg" in resp
-                                            else resp["detail"]
-                                        ),
-                                        duration=6,
-                                    )
-
-                        except Exception as e:
-                            logging.error(
-                                f"Failed to complete request to the server -> {e}"
-                            )
-                            st.error(
-                                "Failed to create new project \n couldn't communicate with the server."
-                            )
-
-            @st.dialog("Add Session")
-            def add_session_to_project():
-                # TODO: Add the sessions ? how when element ?
-                ids = []
-                if st.button("add sessions"):
-                    with st.spinner():
-                        try:
-                            project_req = requests.put(
-                                url=f"{API_URL}/session/project/add/{st.session_state.project_id}",
-                                json={"ids": ids},
-                            )
-
-                            match project_req.status_code:
-                                case 202:
-                                    st.toast("sessions added successfully")
-                                case _:
-                                    resp = project_req.json()
-                                    st.toast(
-                                        (
-                                            resp["msg"]
-                                            if "msg" in resp
-                                            else resp["detail"]
-                                        ),
-                                        duration=6,
-                                    )
-
-                        except Exception as e:
-                            logging.error(
-                                f"Failed to complete request to the server -> {e}"
-                            )
-                            st.error(
-                                "Failed to add sessions to project \n couldn't communicate with the server."
-                            )
-
-            @st.dialog("Remove Session")
-            def remove_session_from_project():
-                # TODO: Fetch sessions currently in project
-                ids = []
-                if st.button("remove sessions"):
-                    with st.spinner():
-                        try:
-                            project_req = requests.delete(
-                                url=f"{API_URL}/session/project/remove/{st.session_state.project_id}",
-                                json={"ids": ids},
-                            )
-
-                            match project_req.status_code:
-                                case 202:
-                                    st.toast("sessions removed successfully")
-                                case _:
-                                    resp = project_req.json()
-                                    st.toast(
-                                        (
-                                            resp["msg"]
-                                            if "msg" in resp
-                                            else resp["detail"]
-                                        ),
-                                        duration=6,
-                                    )
-
-                        except Exception as e:
-                            logging.error(
-                                f"Failed to complete request to the server -> {e}"
-                            )
-                            st.error(
-                                "Failed to remove sessions from project \n couldn't communicate with the server."
-                            )
-
-            @st.dialog("Delete Project")
-            def delete_project():
-                st.popover(
-                    "Deleting this will remove all the sessions from this project!"
-                )
-                project_name = st.text_input("Enter the project name.")
-                if (
-                    st.button("delete project")
-                    and project_name == st.session_state.project_name
-                ):
-                    with st.spinner():
-                        try:
-                            project_req = requests.delete(
-                                url=f"{API_URL}/session/project/delete/{st.session_state.project_id}",
-                            )
-
-                            match project_req.status_code:
-                                case 204:
-                                    st.toast("project deleted successfully")
-                                case _:
-                                    resp = project_req.json()
-                                    st.toast(
-                                        (
-                                            resp["msg"]
-                                            if "msg" in resp
-                                            else resp["detail"]
-                                        ),
-                                        duration=6,
-                                    )
-
-                        except Exception as e:
-                            logging.error(
-                                f"Failed to complete request to the server -> {e}"
-                            )
-                            st.error(
-                                "Failed to remove delete project \n couldn't communicate with the server."
-                            )
-
             if st.button("view projects"):
                 view_projects()
             if st.button("create project"):
                 create_project()
+            if st.session_state.get("view_project_dialog"):
+                view_project()
 
         if st.button(
             "New Chat",
@@ -1202,12 +621,6 @@ def chat():
 
         if st.session_state.get("update_view"):
             st.rerun()
-
-
-def remove_active_session_from_sessions():
-    for session in st.session_state.sessions:
-        if session["_id"] == st.session_state.session_id:
-            st.session_state.sessions.remove(session)
 
 
 def display_session_message():
