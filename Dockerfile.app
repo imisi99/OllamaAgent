@@ -4,7 +4,7 @@ WORKDIR /app
 
 RUN pip install --no-cache-dir streamlit==1.56.0 requests==2.33.1
 
-COPY app/app.py .
+COPY app .
 
 EXPOSE 8501
 

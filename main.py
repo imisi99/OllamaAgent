@@ -15,6 +15,7 @@ from core import agent, emb
 from api.server import serve
 from api.session import session
 from api.user import user
+from api.project import project
 from api.audio import audio_router
 
 logging.basicConfig(level=logging.INFO)
@@ -131,4 +132,5 @@ def health():
 app.include_router(session)
 app.include_router(serve)
 app.include_router(user)
+app.include_router(project)
 app.include_router(audio_router)

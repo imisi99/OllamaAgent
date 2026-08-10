@@ -344,7 +344,7 @@ class Database:
             )
 
     def delete_project(self, project_id: str) -> CustomError | None:
-        project = self.project_collection.find_one({"_id": project_id})
+        project = self.project_collection.find_one({"_id": ObjectId(project_id)})
 
         if not project:
             return CustomError(message="Project doesn't exist.", code=404)
@@ -358,7 +358,9 @@ class Database:
                 message="Deleting of project was not acknowledged", code=500
             )
 
-        project = self.project_collection.find_one_and_delete({"_id": project_id})
+        project = self.project_collection.find_one_and_delete(
+            {"_id": ObjectId(project_id)}
+        )
 
         if not project:
             return CustomError(
@@ -402,9 +404,6 @@ class Database:
         result = self.user_collection.update_one(
             {"_id": ObjectId(user_id)}, {"$set": {"name": name}}
         )
-
-        if result.modified_count == 0:
-            return False
 
         return result.acknowledged
 

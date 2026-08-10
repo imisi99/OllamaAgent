@@ -8,9 +8,9 @@ import httpx
 import requests
 import streamlit as st
 
-from .session import rename_sess, delete_sess, find_similar_sess
-from .user import rename_user, user_memory, add_memory
-from .project import (
+from session import rename_sess, delete_sess, find_similar_sess
+from user import rename_user, user_memory, add_memory
+from project import (
     view_project,
     view_projects,
     remove_session_from_project,
@@ -29,6 +29,7 @@ from streamlit.runtime.uploaded_file_manager import UploadedFile
 # Add the audio functionality use a STT
 # Add the audio implementatoin
 
+logging.basicConfig(level=logging.INFO)
 
 float_init()
 
@@ -132,28 +133,30 @@ def header():
 def user_profile():
     with st.sidebar:
         if st.button(st.session_state.user_name, use_container_width=True):
+            st.session_state.active_dialog = "view_settings"
+            st.rerun()
 
-            @st.dialog("View Settings")
-            def view_settings():
-                if st.button("Rename", use_container_width=True):
-                    st.session_state.active_dialog = "rename_user"
-                    st.rerun()
-                if st.button("Memory", use_container_width=True):
-                    st.session_state.active_dialog = "user_memory"
-                    st.rerun()
-                if st.button("Add", use_container_width=True):
-                    st.session_state.active_dialog = "add_memory"
-                    st.rerun()
+        @st.dialog("View Settings")
+        def view_settings():
+            if st.button("Rename", use_container_width=True):
+                st.session_state.active_dialog = "rename_user"
+                st.rerun()
+            if st.button("Memory", use_container_width=True):
+                st.session_state.active_dialog = "user_memory"
+                st.rerun()
+            if st.button("Add", use_container_width=True):
+                st.session_state.active_dialog = "add_memory"
+                st.rerun()
 
-            view_settings()
-
-            match st.session_state.active_dialog:
-                case "rename_user":
-                    rename_user()
-                case "user_memory":
-                    user_memory()
-                case "add_memory":
-                    add_memory()
+        match st.session_state.active_dialog:
+            case "view_settings":
+                view_settings()
+            case "rename_user":
+                rename_user()
+            case "user_memory":
+                user_memory()
+            case "add_memory":
+                add_memory()
 
 
 def display_session_actions():
@@ -254,14 +257,22 @@ def get_or_create_user():
 
 def session_sidebar():
     with st.sidebar:
-        with st.expander("Projects"):
+        if st.button("Projects", use_container_width=True):
+            st.session_state.active_dialog = "view_projects"
+            st.rerun()
 
-            if st.button("view projects"):
-                view_projects()
-            if st.button("create project"):
-                create_project()
-            if st.session_state.get("view_project_dialog"):
-                view_project()
+        while st.session_state.get("active_dialog", "") != "":
+            match st.session_state.active_dialog:
+                case "view_projects":
+                    view_projects()
+                case "view_project":
+                    view_project()
+                case "create_project":
+                    create_project()
+                case "delete_project":
+                    delete_project()
+                case _:
+                    break
 
         if st.button(
             "New Chat",
@@ -648,6 +659,9 @@ if "session_id" not in st.session_state:
     st.session_state.session_uid = ""
     st.session_state.session_name = ""
     st.session_state.messages = []
+
+if "active_dialog" not in st.session_state:
+    st.session_state.active_dialog = ""
 
 
 header()

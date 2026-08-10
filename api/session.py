@@ -11,12 +11,10 @@ from core.mongo import Database
 from core.qdrant import Job, Qdrant, Task
 from db.mongo import get_mongo_database
 from db.qdrant import get_qdrant_database
-from schemas.mongo import Message, Project, Session
+from schemas.mongo import Message, Session
 from schemas.session import (
-    CreateProject,
     CreateSession,
     SimilarSessions,
-    UpdateProjectSession,
 )
 
 session = APIRouter()
@@ -60,7 +58,7 @@ def create_session(
         err, id = db.create_session(copy.deepcopy(sess))
 
         if err:
-            return JSONResponse(content=err.message, status_code=err.code)
+            return JSONResponse(content={"msg": err.message}, status_code=err.code)
 
         sess["_id"] = id
 
@@ -82,7 +80,7 @@ def create_session(
         err = db.create_message(message)
 
         if err:
-            return JSONResponse(content=err.message, status_code=err.code)
+            return JSONResponse(content={"msg": err.message}, status_code=err.code)
 
         qdb.add_job(Task(job=Job.UPDATE_POINT, uid=uid, message=message))
 
@@ -110,7 +108,7 @@ def rename(
     try:
         err = db.rename_session(session_id, name)
         if err:
-            return JSONResponse(content=err.message, status_code=err.code)
+            return JSONResponse(content={"msg": err.message}, status_code=err.code)
 
         qdb.add_job(Task(uid=session_uid, job=Job.UPDATE_PAYLOAD, name=name))
 
@@ -158,7 +156,7 @@ def add_message(
         err = db.create_message(copy.deepcopy(message))
 
         if err:
-            return JSONResponse(content=err.message, status_code=err.code)
+            return JSONResponse(content={"msg": err.message}, status_code=err.code)
 
         qdb.add_job(Task(job=Job.UPDATE_POINT, uid=session_uid, message=message))
 
@@ -226,7 +224,7 @@ def fetch_single_session(session_id: str, db: Database = Depends(get_mongo_datab
     try:
         err, sess, messages = db.fetch_session(session_id)
         if err:
-            return JSONResponse(content=err.message, status_code=err.code)
+            return JSONResponse(content={"msg": err.message}, status_code=err.code)
 
         return JSONResponse(
             status_code=status.HTTP_200_OK,
@@ -272,140 +270,6 @@ async def fetch_similar_sessions(
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={"msg": f"Failed to fetch similar sessions -> {e}."},
-        )
-
-
-@session.post("/session/project/create")
-def create_project(payload: CreateProject, db: Database = Depends(get_mongo_database)):
-    try:
-        project: Project = {
-            "_id": "",
-            "name": payload.name,
-            "goal": payload.goal,
-            "created_at": datetime.datetime.now(),
-        }
-
-        err, id = db.create_project(project)
-        if err:
-            return JSONResponse(content=err.message, status_code=err.code)
-
-        return JSONResponse(status_code=status.HTTP_201_CREATED, content={"id": id})
-
-    except Exception as e:
-        logging.error(f"Failed to create project, An error occured -> {e}")
-        return JSONResponse(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"msg": f"Failed to create the project -> {e}."},
-        )
-
-
-@session.get("/session/project/all")
-def get_projects(db: Database = Depends(get_mongo_database)):
-    try:
-        projects = db.fetch_projects()
-
-        if len(projects) == 0:
-            return JSONResponse(
-                content={"msg": "No project found."},
-                status_code=status.HTTP_404_NOT_FOUND,
-            )
-
-        return JSONResponse(
-            status_code=status.HTTP_200_OK, content={"projects": projects}
-        )
-
-    except Exception as e:
-        return JSONResponse(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"msg": f"Failed to retrieve projects -> {e}."},
-        )
-
-
-@session.get("/session/project/{project_id}")
-def get_project(project_id: str, db: Database = Depends(get_mongo_database)):
-    try:
-        err, project, sessions = db.fetch_project(project_id)
-
-        if err:
-            return JSONResponse(content=err.message, status_code=err.code)
-
-        return JSONResponse(
-            status_code=status.HTTP_200_OK,
-            content={"project": project, "sessions": sessions},
-        )
-
-    except Exception as e:
-        return JSONResponse(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"msg": f"Failed to retrieve project -> {e}."},
-        )
-
-
-@session.put("/session/project/add/{project_id}")
-def add_to_project(
-    session: UpdateProjectSession,
-    project_id: str,
-    db: Database = Depends(get_mongo_database),
-):
-    try:
-        err = db.add_session_to_project(session.ids, project_id)
-
-        if err:
-            return JSONResponse(content=err.message, status_code=err.code)
-
-        return JSONResponse(
-            status_code=status.HTTP_202_ACCEPTED,
-            content={"msg": "Session added to project."},
-        )
-
-    except Exception as e:
-        logging.error(f"Failed to update project to add session -> {e}")
-        return JSONResponse(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"msg": f"Failed to add session to project -> {e}."},
-        )
-
-
-@session.delete("/session/project/remove/{project_id}")
-def remove_from_project(
-    session: UpdateProjectSession,
-    project_id: str,
-    db: Database = Depends(get_mongo_database),
-):
-    try:
-        err = db.remove_session_from_project(session.ids, project_id)
-
-        if err:
-            return JSONResponse(content=err.message, status_code=err.code)
-
-        return JSONResponse(
-            status_code=status.HTTP_202_ACCEPTED,
-            content={"msg": "Session removed from project."},
-        )
-
-    except Exception as e:
-        logging.error(f"Failed to update project to remove session -> {e}")
-        return JSONResponse(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"msg": f"Failed to remove session from project -> {e}."},
-        )
-
-
-@session.delete("/session/project/delete/{project_id}")
-def delete_project(project_id: str, db: Database = Depends(get_mongo_database)):
-    try:
-        err = db.delete_project(project_id)
-
-        if err:
-            return JSONResponse(content=err.message, status_code=err.code)
-
-        return JSONResponse(status_code=status.HTTP_204_NO_CONTENT, content=None)
-
-    except Exception as e:
-        logging.error(f"Failed to delete proejct -> {e}")
-        return JSONResponse(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"msg": f"Failed to delete project -> {e}."},
         )
 
 

@@ -2,7 +2,8 @@ import streamlit as st
 import requests
 import time
 import logging
-from .app import API_URL
+
+API_URL = "http://localhost:8000"
 
 
 @st.dialog("Rename Session")

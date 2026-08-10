@@ -3,7 +3,7 @@ import streamlit as st
 import time
 import logging
 
-from .app import API_URL
+API_URL = "http://localhost:8000"
 
 
 @st.dialog("Change your username")
