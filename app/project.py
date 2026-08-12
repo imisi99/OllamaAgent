@@ -1,3 +1,5 @@
+from re import T
+
 import requests
 import time
 import streamlit as st
@@ -41,7 +43,7 @@ def view_projects():
             except Exception as e:
                 logging.error(f"Failed to complete request to the server -> {e}")
                 st.error(
-                    "Failed to view projects \n couldn't communicate with the server."
+                    "Failed to view projects ... couldn't communicate with the server."
                 )
 
     for project in st.session_state.projects:
@@ -102,7 +104,7 @@ def view_project():
             except Exception as e:
                 logging.error(f"Failed to complete request to the server -> {e}")
                 st.error(
-                    "Failed to view project \n couldn't communicate with the server."
+                    "Failed to view project... couldn't communicate with the server."
                 )
 
     for session in st.session_state.project_session:
@@ -148,7 +150,46 @@ def create_project():
                 except Exception as e:
                     logging.error(f"Failed to complete request to the server -> {e}")
                     st.error(
-                        "Failed to create new project \n couldn't communicate with the server."
+                        "Failed to create new project... couldn't communicate with the server."
+                    )
+
+
+@st.dialog("Edit Project")
+def edit_project():
+    st.session_state.active_dialog = ""
+    name = st.text_input("Project name", value=st.session_state.project_name)
+    goal = st.text_input("Project goal", value=st.session_state.project_goal)
+
+    with st.container(horizontal=True, horizontal_alignment="right"):
+        if st.button("edit", type="primary"):
+            with st.spinner("editing"):
+                try:
+                    project_req = requests.put(
+                        url=f"{API_URL}/project/edit",
+                        json={
+                            "name": name,
+                            "goal": goal,
+                        },
+                    )
+
+                    match project_req.status_code:
+                        case 202:
+                            st.toast("Project edit successfully")
+                            st.session_state.update_s_project_view = True
+                            st.session_state.active_dialog = "view_project"
+                            time.sleep(0.8)
+                            st.rerun()
+
+                        case _:
+                            resp = project_req.json()
+                            st.toast(
+                                (resp["msg"] if "msg" in resp else resp["detail"]),
+                                duration=6,
+                            )
+                except Exception as e:
+                    logging.error(f"Failed to complete request to the server -> {e}")
+                    st.error(
+                        "Failed to edit project... couldn't communicate with the server."
                     )
 
 
@@ -177,7 +218,7 @@ def add_session_to_project():
             except Exception as e:
                 logging.error(f"Failed to complete request to the server -> {e}")
                 st.error(
-                    "Failed to add sessions to project \n couldn't communicate with the server."
+                    "Failed to add sessions to project... couldn't communicate with the server."
                 )
 
 
@@ -206,7 +247,7 @@ def remove_session_from_project():
             except Exception as e:
                 logging.error(f"Failed to complete request to the server -> {e}")
                 st.error(
-                    "Failed to remove sessions from project \n couldn't communicate with the server."
+                    "Failed to remove sessions from project... couldn't communicate with the server."
                 )
 
 
@@ -246,7 +287,7 @@ def delete_project():
                             f"Failed to complete request to the server -> {e}"
                         )
                         st.error(
-                            "Failed to remove delete project \n couldn't communicate with the server."
+                            "Failed to remove delete project... couldn't communicate with the server."
                         )
     else:
         st.error("Invalid name")

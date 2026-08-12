@@ -39,6 +39,26 @@ def create_project(payload: CreateProject, db: Database = Depends(get_mongo_data
         )
 
 
+@project.put("/project/edit/{project_id}")
+def edit_project(
+    project_id: str, payload: CreateProject, db: Database = Depends(get_mongo_database)
+):
+    try:
+        err = db.edit_project_details(payload.name, payload.goal, project_id)
+        if err:
+            return JSONResponse(content={"msg": err.message}, status_code=err.code)
+        return JSONResponse(
+            status_code=status.HTTP_202_ACCEPTED,
+            content={"msg": "Project updated successfully."},
+        )
+    except Exception as e:
+        logging.error(f"Failed to edit project, An error occured -> {e}")
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"msg": f"Failed to edit the project -> {e}."},
+        )
+
+
 @project.get("/project/all")
 def get_projects(db: Database = Depends(get_mongo_database)):
     try:

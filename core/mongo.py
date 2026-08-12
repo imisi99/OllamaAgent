@@ -325,10 +325,29 @@ class Database:
         if failed_session:
             return CustomError(message="A session deosn't exist.", code=404)
 
+    def edit_project_details(
+        self, name: str, goal: str, project_id: str
+    ) -> CustomError | None:
+        result = self.project_collection.update_one(
+            {"_id": ObjectId(project_id)},
+            update={"$set": {"name": name, "goal": goal}},
+        )
+
+        if result.matched_count == 0:
+            return CustomError(message="The project doesn't exist", code=404)
+
+        if not result.acknowledged:
+            return CustomError(
+                message="Editing of project was not acknowledged", code=500
+            )
+
     def rename_session(self, session_id: str, name: str) -> CustomError | None:
         result = self.session_collection.update_one(
             {"_id": ObjectId(session_id)}, {"$set": {"name": name}}
         )
+
+        if result.matched_count == 0:
+            return CustomError(message="The session doesn't exist", code=404)
 
         if not result.acknowledged:
             return CustomError(
