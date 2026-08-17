@@ -6,6 +6,22 @@ import logging
 API_URL = "http://localhost:8000"
 
 
+def view_all_sessions_preview():
+    if st.session_state.get("get_sessions"):
+        st.session_state.sessions = []
+        try:
+            get_req = requests.get(url=f"{API_URL}/session/all/preview")
+
+            match get_req.status_code:
+                case 200:
+                    st.session_state.sessions = get_req.json()["sessions"]
+                    st.session_state.get_sessions = False
+        except Exception as e:
+            logging.error(f"Failed to complete request to the server -> {e}")
+            st.error("Failed to fetch sessions... server error")
+
+
+@st.dialog("View Project Session")
 @st.dialog("Rename Session")
 def rename_sess():
     new_name = st.text_input("Enter New Name", value=st.session_state.session_name)
@@ -37,9 +53,7 @@ def rename_sess():
 
                 except Exception as e:
                     logging.error(f"Failed to complete request to the server -> {e}")
-                    st.error(
-                        "Failed to rename session \n couldn't communicate with the server."
-                    )
+                    st.error("Failed to rename session... server error")
 
 
 @st.dialog("Delete Session")
@@ -74,9 +88,7 @@ def delete_sess():
 
             except Exception as e:
                 logging.error(f"Failed to complete request to the server -> {e}")
-                st.error(
-                    "Failed to delete session \n couldn't communicate with the server."
-                )
+                st.error("Failed to delete session... server error")
 
 
 @st.dialog("Find Similar Sessions")
@@ -158,9 +170,7 @@ def find_similar_sess():
                     st.info(resp["msg"] if "msg" in resp else resp["detail"])
             except Exception as e:
                 logging.error(f"Failed to complete request to the server -> {e}")
-                st.error(
-                    "Failed to find similar sessions, couldn't communicate with the server."
-                )
+                st.error("Failed to find similar sessions... server error")
 
 
 def remove_active_session_from_sessions():

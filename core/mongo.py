@@ -244,8 +244,6 @@ class Database:
                 (cast(Session, session), self.fetch_message_for_redis(session["_id"]))
             )
 
-        logging.info(result)
-
         return result
 
     def fetch_project(

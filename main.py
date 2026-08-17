@@ -59,7 +59,7 @@ async def lifespan(app: FastAPI):
         )
 
         embed = OllamaEmbeddings(
-            model="nomic-embed-text",
+            model="qwen3-embedding:0.6b",
             base_url=OLLAMA_BASE_URL,
             keep_alive=15,
         )
@@ -99,7 +99,7 @@ async def lifespan(app: FastAPI):
     )
     requests.post(
         f"{base_url}/api/embeddings",
-        json={"model": "nomic-embed-text", "keep_alive": 0},
+        json={"model": "qwen3-embedding:0.6b", "keep_alive": 0},
     )
     (
         await qdrant.QDRANT_DATABASE.finish_queue()

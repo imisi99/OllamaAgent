@@ -1,9 +1,9 @@
-from re import T
-
 import requests
 import time
 import streamlit as st
 import logging
+
+from session import view_all_sessions_preview
 
 API_URL = "http://localhost:8000"
 
@@ -75,6 +75,11 @@ def view_projects():
 @st.dialog("Project")
 def view_project():
     st.session_state.active_dialog = ""
+
+    if st.button("Add Session", icon=":material/add:", type="tertiary"):
+        st.session_state.active_dialog = "add_sessions"
+        st.rerun()
+
     if st.session_state.get("loaded_project_id") != st.session_state.project_id:
         with st.spinner():
             try:
@@ -195,36 +200,57 @@ def edit_project():
 
 @st.dialog("Add Session")
 def add_session_to_project():
-    # TODO: Add the sessions ? how when element ?
-    ids = []
-    if st.button("add sessions"):
-        with st.spinner():
-            try:
-                project_req = requests.put(
-                    url=f"{API_URL}/project/add/{st.session_state.project_id}",
-                    json={"ids": ids},
-                )
+    st.session_state.active_dialog = ""
+    view_all_sessions_preview()
 
-                match project_req.status_code:
-                    case 202:
-                        st.toast("sessions added successfully")
-                    case _:
-                        resp = project_req.json()
-                        st.toast(
-                            (resp["msg"] if "msg" in resp else resp["detail"]),
-                            duration=6,
+    if st.button("Create Session", icon=":material/add:", type="tertiary"):
+        st.session_state.active_dialog = "create_session"
+        st.rerun()
+
+    ids = []
+    if st.session_state.sessions:
+        st.write("Select sessions to add")
+        for session in st.session_state.sessions:
+            if st.checkbox(session["name"]):
+                ids.append(session["_id"])
+
+    if ids:
+        with st.container(horizontal=True, horizontal_alignment="right"):
+            if st.button("add", type="primary"):
+                with st.spinner():
+                    try:
+                        project_req = requests.put(
+                            url=f"{API_URL}/project/add/{st.session_state.project_id}",
+                            json={"ids": ids},
                         )
 
-            except Exception as e:
-                logging.error(f"Failed to complete request to the server -> {e}")
-                st.error(
-                    "Failed to add sessions to project... couldn't communicate with the server."
-                )
+                        match project_req.status_code:
+                            case 202:
+                                st.toast("sessions added successfully")
+                                st.session_state.active_dialog = "view_project"
+                                time.sleep(0.8)
+                                st.rerun()
+                            case _:
+                                resp = project_req.json()
+                                st.toast(
+                                    (resp["msg"] if "msg" in resp else resp["detail"]),
+                                    duration=6,
+                                )
+
+                    except Exception as e:
+                        logging.error(
+                            f"Failed to complete request to the server -> {e}"
+                        )
+                        st.error(
+                            "Failed to add sessions to project... couldn't communicate with the server."
+                        )
 
 
 @st.dialog("Remove Session")
 def remove_session_from_project():
-    # TODO: Fetch sessions currently in project
+    for session in st.session_state.project_session:
+        if st.button(session["name"]):
+            pass
     ids = []
     if st.button("remove sessions"):
         with st.spinner():

@@ -52,7 +52,7 @@ class Qdrant:
         self.jobs: asyncio.Queue[Task] = asyncio.Queue()
 
     async def create_point(self, session: Session) -> CustomError | None:
-        vector: list[float] = []
+        vector: list[float] = [0] * 1024
         result = self.client.upsert(
             collection_name="chats",
             points=[
@@ -151,19 +151,17 @@ class Qdrant:
         return None, (response, avgScore)
 
     async def update_point(self, uid: str, message: Message) -> CustomError | None:
-        point = self.client.retrieve(
-            "chats", ids=[message["session_id"]], with_payload=True
-        )
+        point = self.client.retrieve("chats", ids=[uid], with_payload=True)
         if not point:
             logging.error(
-                f"Tried to update point with id -> {id} but point doesn't exist in vector space."
+                f"Tried to update point with id -> {uid} but point doesn't exist in vector space."
             )
             return CustomError(message="Point doesn't exist.", code=404)
 
         payload = point[0].payload
         if not payload:
             logging.error(
-                f"Tried to update point with id -> {id} but payload doesn't exist"
+                f"Tried to update point with id -> {uid} but payload doesn't exist"
             )
             return CustomError(message="Payload doesn't exist.", code=404)
 

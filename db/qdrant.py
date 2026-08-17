@@ -8,7 +8,7 @@ from core.emb import EmbeddingModel
 from core.qdrant import Qdrant
 
 QDRANT_CLIENT: Optional[QdrantClient] = None
-VECTORSIZE = 768
+VECTORSIZE = 1024
 QDRANT_HOST = os.getenv("QDRANT_HOST")
 QDRANT_PORT = int(os.getenv("QDRANT_PORT", "0"))
 QDRANT_DATABASE: Optional[Qdrant] = None

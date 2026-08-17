@@ -269,6 +269,8 @@ def session_sidebar():
                     view_project()
                 case "create_project":
                     create_project()
+                case "add_sessions":
+                    add_session_to_project()
                 case "delete_project":
                     delete_project()
                 case _:
@@ -293,6 +295,7 @@ def session_sidebar():
                     sessions_req = requests.get(url=f"{API_URL}/session/all/preview")
 
                     if sessions_req.status_code == 404:
+                        st.session_state.sessions = []
                         st.info("you have no existing session start a new session")
 
                     elif sessions_req.status_code == 200:
@@ -504,6 +507,7 @@ def chat():
                             "audio": st.session_state.audio,
                             "thought": "",
                             "timestamp": "",
+                            "session_id": st.session_state.session_id,
                             "files": st.session_state.chat_files,
                             "images": st.session_state.chat_images,
                         },
@@ -572,6 +576,7 @@ def chat():
                             "audio": st.session_state.audio,
                             "thought": "",
                             "timestamp": "",
+                            "session_id": st.session_state.session_id,
                             "files": st.session_state.chat_files,
                             "images": st.session_state.chat_images,
                         },
