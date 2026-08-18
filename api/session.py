@@ -239,6 +239,30 @@ def fetch_single_session(session_id: str, db: Database = Depends(get_mongo_datab
         )
 
 
+@session.get("/session/preview/exclude/{project_id}")
+def fetch_all_session_exclude_project(
+    project_id: str, db: Database = Depends(get_mongo_database)
+):
+    try:
+        sessions = db.fetch_all_session_exclude_project(project_id)
+        if len(sessions) == 0:
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content={"msg": "No session created yet."},
+            )
+
+        return JSONResponse(
+            status_code=status.HTTP_200_OK, content={"sessions": sessions}
+        )
+
+    except Exception as e:
+        logging.error(f"Failed to retrieve sessions for preview -> {e}")
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"msg": f"Failed to fetch sessions -> {e}."},
+        )
+
+
 @session.get("/session/find/similar")
 async def fetch_similar_sessions(
     details: SimilarSessions, qdb: Qdrant = Depends(get_qdrant_database)

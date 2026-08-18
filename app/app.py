@@ -11,6 +11,7 @@ import streamlit as st
 from session import rename_sess, delete_sess, find_similar_sess
 from user import rename_user, user_memory, add_memory
 from project import (
+    edit_project,
     view_project,
     view_projects,
     remove_session_from_project,
@@ -138,6 +139,7 @@ def user_profile():
 
         @st.dialog("View Settings")
         def view_settings():
+            st.session_state.active_dialog = ""
             if st.button("Rename", use_container_width=True):
                 st.session_state.active_dialog = "rename_user"
                 st.rerun()
@@ -168,7 +170,6 @@ def display_session_actions():
             else st.session_state.session_name
         )
 
-        @st.dialog(name)
         def sess_actions():
             if st.button("Rename"):
                 st.session_state.active_dialog = "rename_sess"
@@ -183,7 +184,8 @@ def display_session_actions():
         session_actions = st.container()
 
         with session_actions:
-            sess_actions()
+            with st.expander(name):
+                sess_actions()
 
         session_actions.float(
             "top: 60px; background-color: rgba(38, 39, 48, 0.75); backdrop-filter: blur(8px); --webkit-backdrop-filter: blur(8px); z-index: 9999;"
@@ -269,6 +271,10 @@ def session_sidebar():
                     view_project()
                 case "create_project":
                     create_project()
+                case "edit_project":
+                    edit_project()
+                case "remove_sessions":
+                    remove_session_from_project()
                 case "add_sessions":
                     add_session_to_project()
                 case "delete_project":
@@ -333,8 +339,9 @@ def session_sidebar():
                                 st.session_state.ghost_session = False
                                 st.session_state.show_header = False
                                 st.session_state.messages = message_req.json()[
-                                    "session"
-                                ]["messages"]
+                                    "messages"
+                                ]
+                                logging.error(st.session_state.messages)
                                 st.rerun()
 
                             elif message_req.status_code == 404:
@@ -346,7 +353,6 @@ def session_sidebar():
                                     resp["msg"] if "msg" in resp else resp["detail"],
                                     duration=7,
                                 )
-                            st.stop()
 
                         except Exception as e:
                             logging.error(
@@ -355,7 +361,6 @@ def session_sidebar():
                             st.error(
                                 "Failed to fetch session \n couldn't communicate with the server."
                             )
-                            st.stop()
 
 
 def filter_files_audio(upload_file: list[UploadedFile], audio: UploadedFile | None):
@@ -646,7 +651,7 @@ def display_session_message():
         else:
             with st.popover("*thought...*", type="tertiary"):
                 st.write(msg["thought"])
-            st.markdown(msg["content"])
+            st.markdown(msg["content"], text_alignment="justify")
 
 
 if "show_header" not in st.session_state:

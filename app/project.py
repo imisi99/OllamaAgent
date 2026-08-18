@@ -3,24 +3,25 @@ import time
 import streamlit as st
 import logging
 
-from session import view_all_sessions_preview
-
 API_URL = "http://localhost:8000"
 
 logging.basicConfig(level=logging.INFO)
 
 
-@st.dialog("Projects")
+@st.dialog("Projects", width="medium")
 def view_projects():
     st.session_state.active_dialog = ""
+
+    if "projects" not in st.session_state:
+        st.session_state.projects = []
+        st.session_state.update_project_view = True
 
     if st.button("New Project", icon=":material/add:", type="tertiary"):
         st.session_state.active_dialog = "create_project"
         st.rerun()
 
-    if "projects" not in st.session_state or st.session_state.get(
-        "update_project_view"
-    ):
+    if st.session_state.get("update_project_view"):
+        st.session_state.projects = []
         with st.spinner():
             try:
                 projects_req = requests.get(url=f"{API_URL}/project/all")
@@ -28,7 +29,6 @@ def view_projects():
                 match projects_req.status_code:
                     case 404:
                         st.info("You have no existing project create one.")
-                        st.stop()
                     case 200:
                         st.session_state.projects = projects_req.json()["projects"]
                         st.session_state.update_project_view = False
@@ -42,9 +42,7 @@ def view_projects():
 
             except Exception as e:
                 logging.error(f"Failed to complete request to the server -> {e}")
-                st.error(
-                    "Failed to view projects ... couldn't communicate with the server."
-                )
+                st.error("Failed to view projects... server error.")
 
     for project in st.session_state.projects:
         with st.expander(project["name"]):
@@ -57,6 +55,8 @@ def view_projects():
                 key=project["_id"],
                 use_container_width=True,
             ):
+                st.session_state.project_name = project["name"]
+                st.session_state.project_goal = project["goal"]
                 st.session_state.project_id = project["_id"]
                 st.session_state.active_dialog = "view_project"
                 st.rerun()
@@ -72,16 +72,42 @@ def view_projects():
                 st.rerun()
 
 
-@st.dialog("Project")
+@st.dialog("Project", width="large")
 def view_project():
     st.session_state.active_dialog = ""
 
-    if st.button("Add Session", icon=":material/add:", type="tertiary"):
+    if "project_session" not in st.session_state:
+        st.session_state.project_session = []
+        st.session_state.update_s_project_view = True
+
+    back, edit, delete = st.columns([7, 1, 1], vertical_alignment="top")
+    if back.button("Go to Projects", type="tertiary"):
+        st.session_state.active_dialog = "view_projects"
+        st.rerun()
+
+    if edit.button("Edit Project"):
+        st.session_state.active_dialog = "edit_project"
+        st.rerun()
+
+    if delete.button("Delete Project", type="primary"):
+        st.session_state.active_dialog = "delete_project"
+        st.rerun()
+
+    st.header(st.session_state.project_name)
+    st.subheader(st.session_state.project_goal)
+
+    add, rem, _ = st.columns([1, 1, 7], vertical_alignment="top")
+    if add.button("Add Session", icon=":material/add:", type="tertiary"):
         st.session_state.active_dialog = "add_sessions"
         st.rerun()
 
-    if st.session_state.get("loaded_project_id") != st.session_state.project_id:
+    if rem.button("Remove Session", icon=":material/remove:", type="tertiary"):
+        st.session_state.active_dialog = "remove_sessions"
+        st.rerun()
+
+    if st.session_state.get("update_s_project_view"):
         with st.spinner():
+            st.session_state.project_session = []
             try:
                 project_req = requests.get(
                     url=f"{API_URL}/project/{st.session_state.project_id}"
@@ -90,15 +116,11 @@ def view_project():
                 match project_req.status_code:
                     case 404:
                         st.info("This project doesn't exist")
-                        st.stop()
                     case 200:
-                        (
-                            st.session_state.loaded_project_id,
-                            st.session_state.project_session,
-                        ) = (
-                            project_req.json()["project"]["_id"],
-                            project_req.json()["sessions"],
-                        )
+                        st.session_state.update_s_project_view = False
+                        st.session_state.project_session = project_req.json()[
+                            "sessions"
+                        ]
                     case _:
                         resp = project_req.json()
                         st.toast(
@@ -108,22 +130,46 @@ def view_project():
                         st.stop()
             except Exception as e:
                 logging.error(f"Failed to complete request to the server -> {e}")
-                st.error(
-                    "Failed to view project... couldn't communicate with the server."
-                )
+                st.error("Failed to view project... server error.")
 
     for session in st.session_state.project_session:
         if st.button(session["name"]):
-            pass
+            try:
+                message_req = requests.get(f"{API_URL}/session/" + session["_id"])
+
+                match message_req.status_code:
+                    case 200:
+                        st.session_state.session_name = session["name"]
+                        st.session_state.session_id = session["_id"]
+                        st.session_state.session_uid = session["uuid"]
+                        st.session_state.ghost_session = False
+                        st.session_state.show_header = False
+                        st.session_state.messages = message_req.json()["messages"]
+                        st.rerun()
+                    case 404:
+                        st.toast("Session not found.")
+                    case _:
+                        resp = message_req.json()
+                        st.toast(
+                            resp["msg"] if "msg" in resp else resp["detail"],
+                            duration=7,
+                        )
+
+            except Exception as e:
+                logging.error(f"Failed to complete request to the server -> {e}")
+                st.error("Failed to fetch session... server error.")
 
 
-@st.dialog("Create Project")
+@st.dialog("Create Project", width="medium")
 def create_project():
     st.session_state.active_dialog = ""
+
+    if st.button("Go to Projects", type="tertiary"):
+        st.session_state.active_dialog = "view_projects"
+        st.rerun()
+
     name = st.text_input("Project name")
     goal = st.text_input("Project goal")
-
-    # TODO: Maybe add a view sessions ? search session by name to add to the project when created
 
     with st.container(horizontal=True, horizontal_alignment="right"):
         if st.button("create", type="primary"):
@@ -154,14 +200,17 @@ def create_project():
 
                 except Exception as e:
                     logging.error(f"Failed to complete request to the server -> {e}")
-                    st.error(
-                        "Failed to create new project... couldn't communicate with the server."
-                    )
+                    st.error("Failed to create new project... server error.")
 
 
-@st.dialog("Edit Project")
+@st.dialog("Edit Project", width="medium")
 def edit_project():
     st.session_state.active_dialog = ""
+
+    if st.button("Go to Project", type="tertiary"):
+        st.session_state.active_dialog = "view_project"
+        st.rerun()
+
     name = st.text_input("Project name", value=st.session_state.project_name)
     goal = st.text_input("Project goal", value=st.session_state.project_goal)
 
@@ -170,7 +219,7 @@ def edit_project():
             with st.spinner("editing"):
                 try:
                     project_req = requests.put(
-                        url=f"{API_URL}/project/edit",
+                        url=f"{API_URL}/project/edit/{st.session_state.project_id}",
                         json={
                             "name": name,
                             "goal": goal,
@@ -180,7 +229,9 @@ def edit_project():
                     match project_req.status_code:
                         case 202:
                             st.toast("Project edit successfully")
-                            st.session_state.update_s_project_view = True
+                            st.session_state.update_project_view = True
+                            st.session_state.project_goal = goal
+                            st.session_state.project_name = name
                             st.session_state.active_dialog = "view_project"
                             time.sleep(0.8)
                             st.rerun()
@@ -193,24 +244,45 @@ def edit_project():
                             )
                 except Exception as e:
                     logging.error(f"Failed to complete request to the server -> {e}")
-                    st.error(
-                        "Failed to edit project... couldn't communicate with the server."
-                    )
+                    st.error("Failed to edit project... server error.")
 
 
-@st.dialog("Add Session")
+@st.dialog("Add Session", width="medium")
 def add_session_to_project():
     st.session_state.active_dialog = ""
-    view_all_sessions_preview()
+    st.session_state.exclude_sessions = []
 
-    if st.button("Create Session", icon=":material/add:", type="tertiary"):
-        st.session_state.active_dialog = "create_session"
+    try:
+        get_req = requests.get(
+            url=f"{API_URL}/session/preview/exclude/{st.session_state.project_id}"
+        )
+
+        match get_req.status_code:
+            case 200:
+                st.session_state.exclude_sessions = get_req.json()["sessions"]
+            case _:
+                resp = get_req.json()
+                st.toast(resp["msg"] if "msg" in resp else resp["detail"], duration=6)
+
+    except Exception as e:
+        logging.error(f"Failed to complete request to the server -> {e}")
+        st.error("Failed to fetch sessions... server error")
+
+    if st.button("Go to Project", type="tertiary"):
+        st.session_state.active_dialog = "view_project"
+        st.rerun()
+
+    if st.button("New Session", icon=":material/add:", type="tertiary"):
+        st.session_state.session_id = ""
+        st.session_state.session_uid = ""
+        st.session_state.show_header = True
+        st.session_state.messages = []
         st.rerun()
 
     ids = []
-    if st.session_state.sessions:
+    if st.session_state.exclude_sessions:
         st.write("Select sessions to add")
-        for session in st.session_state.sessions:
+        for session in st.session_state.exclude_sessions:
             if st.checkbox(session["name"]):
                 ids.append(session["_id"])
 
@@ -228,6 +300,53 @@ def add_session_to_project():
                             case 202:
                                 st.toast("sessions added successfully")
                                 st.session_state.active_dialog = "view_project"
+                                st.session_state.update_s_project_view = True
+                                time.sleep(0.8)
+                                st.rerun()
+                            case _:
+                                resp = project_req.json()
+                                st.toast(
+                                    (resp["msg"] if "msg" in resp else resp["detail"]),
+                                    duration=6,
+                                )
+
+                    except Exception as e:
+                        logging.error(
+                            f"Failed to complete request to the server -> {e}"
+                        )
+                        st.error("Failed to add sessions to project... server error.")
+
+
+@st.dialog("Remove Session", width="medium")
+def remove_session_from_project():
+    st.session_state.active_dialog = ""
+
+    if st.button("Go to Project", type="tertiary"):
+        st.session_state.active_dialog = "view_project"
+        st.rerun()
+
+    ids = []
+    if st.session_state.project_session:
+        st.write("Select sessions to remove")
+        for session in st.session_state.project_session:
+            if st.checkbox(session["name"]):
+                ids.append(session["_id"])
+
+    if ids:
+        with st.container(horizontal=True, horizontal_alignment="right"):
+            if st.button("remove", type="primary"):
+                with st.spinner():
+                    try:
+                        project_req = requests.delete(
+                            url=f"{API_URL}/project/remove/{st.session_state.project_id}",
+                            json={"ids": ids},
+                        )
+
+                        match project_req.status_code:
+                            case 202:
+                                st.toast("sessions removed successfully")
+                                st.session_state.active_dialog = "view_project"
+                                st.session_state.update_s_project_view = True
                                 time.sleep(0.8)
                                 st.rerun()
                             case _:
@@ -242,44 +361,18 @@ def add_session_to_project():
                             f"Failed to complete request to the server -> {e}"
                         )
                         st.error(
-                            "Failed to add sessions to project... couldn't communicate with the server."
+                            "Failed to remove sessions from project... server error."
                         )
 
 
-@st.dialog("Remove Session")
-def remove_session_from_project():
-    for session in st.session_state.project_session:
-        if st.button(session["name"]):
-            pass
-    ids = []
-    if st.button("remove sessions"):
-        with st.spinner():
-            try:
-                project_req = requests.delete(
-                    url=f"{API_URL}/project/remove/{st.session_state.project_id}",
-                    json={"ids": ids},
-                )
-
-                match project_req.status_code:
-                    case 202:
-                        st.toast("sessions removed successfully")
-                    case _:
-                        resp = project_req.json()
-                        st.toast(
-                            (resp["msg"] if "msg" in resp else resp["detail"]),
-                            duration=6,
-                        )
-
-            except Exception as e:
-                logging.error(f"Failed to complete request to the server -> {e}")
-                st.error(
-                    "Failed to remove sessions from project... couldn't communicate with the server."
-                )
-
-
-@st.dialog("Delete Project")
+@st.dialog("Delete Project", width="medium")
 def delete_project():
     st.session_state.active_dialog = ""
+
+    if st.button("Go to Project", type="tertiary"):
+        st.session_state.active_dialog = "view_project"
+        st.rerun()
+
     st.warning(
         "Deleting this will remove all the sessions from this project but not delete them!"
     )
@@ -312,8 +405,6 @@ def delete_project():
                         logging.error(
                             f"Failed to complete request to the server -> {e}"
                         )
-                        st.error(
-                            "Failed to remove delete project... couldn't communicate with the server."
-                        )
+                        st.error("Failed to remove delete project... server error.")
     else:
         st.error("Invalid name")

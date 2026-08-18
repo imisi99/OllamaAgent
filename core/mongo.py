@@ -1,6 +1,5 @@
 import base64
 from datetime import datetime
-import logging
 from typing import Any, cast
 from bson import ObjectId
 from pymongo import MongoClient
@@ -121,7 +120,7 @@ class Database:
 
     def fetch_message(self, session_id: str) -> list[Message]:
         with self.message_collection.find(
-            {"session_id": ObjectId(session_id)}
+            {"session_id": session_id}, projection={"_id": False}
         ) as cursor:
             messages = list(cursor)
 
@@ -200,9 +199,22 @@ class Database:
 
         return result
 
-    # TODO: Fetch in order of last message datetime && Also exclude the message resources
     def fetch_all_session_preview(self) -> list[Session]:
         with self.session_collection.find(filter={}, projection={}) as cursor:
+            sessions = list(cursor)
+        sessions.sort(key=lambda s: s["last_edited"])
+
+        for session in sessions:
+            session["_id"] = str(session["_id"])
+            session["created_at"] = self.denormalize_timestamp(session["created_at"])
+            session["last_edited"] = self.denormalize_timestamp(session["last_edited"])
+
+        return cast(list[Session], sessions)
+
+    def fetch_all_session_exclude_project(self, project_id: str) -> list[Session]:
+        with self.session_collection.find(
+            {"project_id": {"$ne": project_id}}
+        ) as cursor:
             sessions = list(cursor)
 
         sessions.sort(key=lambda s: s["last_edited"])

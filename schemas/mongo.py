@@ -38,6 +38,7 @@ class Session(TypedDict):
     last_edited: datetime | str
     project_id: str
 
+
 class Project(TypedDict):
     _id: str
     name: str
