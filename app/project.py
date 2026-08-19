@@ -306,7 +306,7 @@ def add_session_to_project():
                             case _:
                                 resp = project_req.json()
                                 st.toast(
-                                    (resp["msg"] if "msg" in resp else resp["detail"]),
+                                    resp["msg"] if "msg" in resp else resp["detail"],
                                     duration=6,
                                 )
 

@@ -226,6 +226,8 @@ class Database:
 
         return cast(list[Session], sessions)
 
+    def fetch_all_project_exclude_session(self):
+
     def fetch_session_for_redis(
         self, session_id: str
     ) -> tuple[CustomError | None, list[Message]]:

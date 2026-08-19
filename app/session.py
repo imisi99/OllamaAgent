@@ -1,3 +1,4 @@
+from httpx import request
 import streamlit as st
 import requests
 import time
@@ -155,6 +156,73 @@ def find_similar_sess():
             except Exception as e:
                 logging.error(f"Failed to complete request to the server -> {e}")
                 st.error("Failed to find similar sessions... server error")
+
+
+@st.dialog("Add Session to Project")
+def add_a_session_to_project():
+    st.session_state.active_dialog = ""
+
+    if st.button("Back to Session", type="tertiary"):
+        st.rerun()
+
+    if "projects" not in st.session_state:
+        st.session_state.projects = []
+        st.session_state.update_project_view = True
+
+    if st.session_state.get("update_project_view"):
+        with st.spinner():
+            try:
+                projects_req = requests.get(url=f"{API_URL}/project/all")
+
+                match projects_req.status_code:
+                    case 404:
+                        st.info("You have no existing project create one.")
+                    case 200:
+                        st.session_state.projects = projects_req.json()["projects"]
+                        st.session_state.update_project_view = False
+                    case _:
+                        resp = projects_req.json()
+                        st.toast(
+                            (resp["msg"] if "msg" in resp else resp["detail"]),
+                            duration=6,
+                        )
+                        st.stop()
+
+            except Exception as e:
+                logging.error(f"Failed to complete request to the server -> {e}")
+                st.error("Failed to view projects... server error.")
+
+    for project in st.session_state.projects:
+        with st.expander(project["name"]):
+            goal, add_proj = st.columns([4, 1], vertical_alignment="center")
+            goal.write(project["goal"])
+            if add_proj.button(
+                "add",
+                key=project["_id"],
+                use_container_width=True,
+                type="primary",
+            ):
+                try:
+                    project_req = requests.put(
+                        url=f"{API_URL}/project/add/{st.session_state.project_id}",
+                        json={"ids": [st.session_state.session_id]},
+                    )
+
+                    match project_req.status_code:
+                        case 202:
+                            st.toast("session added successfully")
+                            time.sleep(0.8)
+                            st.rerun()
+                        case _:
+                            resp = project_req.json()
+                            st.toast(
+                                resp["msg"] if "msg" in resp else resp["detail"],
+                                duration=6,
+                            )
+
+                except Exception as e:
+                    logging.error(f"Failed to complete request to the server -> {e}")
+                    st.error("Failed to add session to project... server error.")
 
 
 def remove_active_session_from_sessions():

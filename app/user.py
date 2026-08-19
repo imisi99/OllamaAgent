@@ -9,6 +9,11 @@ API_URL = "http://localhost:8000"
 @st.dialog("Change your username")
 def rename_user():
     st.session_state.active_dialog = ""
+
+    if st.button("Go to Settings", type="tertiary"):
+        st.session_state.active_dialog = "view_settings"
+        st.rerun()
+
     new_name = st.text_input("Enter New Username")
     if st.button("Confirm", key="confirm_user_rename"):
         if new_name:
@@ -42,6 +47,11 @@ def rename_user():
 @st.dialog("View Memory")
 def user_memory():
     st.session_state.active_dialog = ""
+
+    if st.button("Go to Settings", type="tertiary"):
+        st.session_state.active_dialog = "view_settings"
+        st.rerun()
+
     if "user_memory" not in st.session_state:
         st.session_state.user_memory = {}
 
@@ -146,6 +156,11 @@ def user_memory():
 @st.dialog("Add a memory")
 def add_memory():
     st.session_state.active_dialog = ""
+
+    if st.button("Go to Settings", type="tertiary"):
+        st.session_state.active_dialog = "view_settings"
+        st.rerun()
+
     key = st.text_input("Enter the key")
     value = st.text_input("Enter the value")
 

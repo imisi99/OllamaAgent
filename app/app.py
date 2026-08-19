@@ -8,7 +8,12 @@ import httpx
 import requests
 import streamlit as st
 
-from session import rename_sess, delete_sess, find_similar_sess
+from session import (
+    add_a_session_to_project,
+    rename_sess,
+    delete_sess,
+    find_similar_sess,
+)
 from user import rename_user, user_memory, add_memory
 from project import (
     edit_project,
@@ -150,15 +155,18 @@ def user_profile():
                 st.session_state.active_dialog = "add_memory"
                 st.rerun()
 
-        match st.session_state.active_dialog:
-            case "view_settings":
-                view_settings()
-            case "rename_user":
-                rename_user()
-            case "user_memory":
-                user_memory()
-            case "add_memory":
-                add_memory()
+        while st.session_state.get("active_dialog", "") != "":
+            match st.session_state.active_dialog:
+                case "view_settings":
+                    view_settings()
+                case "rename_user":
+                    rename_user()
+                case "user_memory":
+                    user_memory()
+                case "add_memory":
+                    add_memory()
+                case _:
+                    break
 
 
 def display_session_actions():
@@ -171,14 +179,25 @@ def display_session_actions():
         )
 
         def sess_actions():
-            if st.button("Rename"):
+            rename, delete, find, project = st.columns(
+                [1, 1, 1, 1], vertical_alignment="center"
+            )
+            if rename.button("Rename"):
                 st.session_state.active_dialog = "rename_sess"
                 st.rerun()
-            if st.button("Delete"):
-                st.session_state.active_dialog = "delete_sess"
-                st.rerun()
-            if st.button("Similar"):
+            if find.button("Similar"):
                 st.session_state.active_dialog = "find_similar_sess"
+                st.rerun()
+            if st.session_state.session_pid == "":
+                if project.button("Add Project"):
+                    st.session_state.active_dialog = "add_a_session"
+                    st.rerun()
+            else:
+                if project.button("View Project"):
+                    st.session_state.active_dialog = "view_project"
+                    st.rerun()
+            if delete.button("Delete", type="primary"):
+                st.session_state.active_dialog = "delete_sess"
                 st.rerun()
 
         session_actions = st.container()
@@ -277,6 +296,8 @@ def session_sidebar():
                     remove_session_from_project()
                 case "add_sessions":
                     add_session_to_project()
+                case "add_a_session":
+                    add_a_session_to_project()
                 case "delete_project":
                     delete_project()
                 case _:
@@ -289,6 +310,7 @@ def session_sidebar():
         ):
             st.session_state.session_id = ""
             st.session_state.session_uid = ""
+            st.session_state.session_pid = ""
             st.session_state.show_header = True
             st.session_state.messages = []
             st.rerun()
@@ -336,6 +358,7 @@ def session_sidebar():
                             if message_req.status_code == 200:
                                 st.session_state.session_id = session["_id"]
                                 st.session_state.session_uid = session["uuid"]
+                                st.session_state.session_uid = session["project_id"]
                                 st.session_state.ghost_session = False
                                 st.session_state.show_header = False
                                 st.session_state.messages = message_req.json()[
@@ -667,6 +690,7 @@ if "stored_prompt" not in st.session_state:
 if "session_id" not in st.session_state:
     st.session_state.session_id = ""
     st.session_state.session_uid = ""
+    st.session_state.session_pid = ""
     st.session_state.session_name = ""
     st.session_state.messages = []
 
