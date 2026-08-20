@@ -7,13 +7,16 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 from core.agent import Model, get_model
 from core.mongo import Database
-from core.qdrant import Qdrant
+from core.qdrant import Job, Qdrant, Task
 from db.mongo import get_mongo_database
 from db.qdrant import get_qdrant_database
 from schemas.agent import SessionConversation, SessionState
 from schemas.mongo import Message
 
 serve = APIRouter()
+
+# TODO: The Flow from the chatting to the summarizing of message for the embed cuts of the chatting ? (This happens at somewhat every run ?) This also happens twice ?
+# This stuff doesn't add to the redis when it does the summarizer which is what i'm guessing is causing this stuff to happen like this
 
 
 @serve.post("/agent/chat")
@@ -90,12 +93,9 @@ async def stream_chat(
                     )
                     return JSONResponse(status_code=err.code, content=err.message)
 
-                qdrant_updated = await qdb.update_point(input["session_id"], message)
-
-                if not qdrant_updated:
-                    logging.error(
-                        "[AGENT][QDRANT] Failed to update chat response to qdrant"
-                    )
+                qdb.add_job(
+                    Task(Job.UPDATE_POINT, uid=input["session_uid"], message=message)
+                )
 
     asyncio.create_task(run_and_save())
 

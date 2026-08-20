@@ -19,6 +19,9 @@ from schemas.session import (
 
 session = APIRouter()
 
+# TODO: Deleting sessions have to cascade to messages also
+# Making a message is also trigerring the summarizer from where ?
+
 
 @session.post("/session/create")
 def create_session(
@@ -305,8 +308,8 @@ def delete_session(
     qdb: Qdrant = Depends(get_qdrant_database),
 ):
     try:
-        deleted = db.delete_session(session_id)
-        if not deleted:
+        err = db.delete_session(session_id)
+        if err:
             raise Exception("MongoDB operation to delete session was not acknowledged.")
 
         qdb.add_job(Task(uid=session_uid, job=Job.DELETE_POINT))

@@ -8,7 +8,6 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import (
     FieldCondition,
     Filter,
-    FilterSelector,
     MatchValue,
     PointStruct,
 )
@@ -241,15 +240,6 @@ class Qdrant:
 
         result = self.client.delete(collection_name="chats", points_selector=[id])
 
-        result = self.client.delete(
-            collection_name="chats",
-            points_selector=FilterSelector(
-                filter=Filter(
-                    must=[FieldCondition(key="session_id", match=MatchValue(value=id))]
-                )
-            ),
-        )
-
         success = result.status in (UpdateStatus.COMPLETED, UpdateStatus.ACKNOWLEDGED)
         if not success:
             logging.error(f"Failed to delete point with id -> {id} result -> {result}")
@@ -336,24 +326,24 @@ class Qdrant:
                     try:
                         match task.job:
                             case Job.CREATE_POINT:
-                                created = await self.create_point(
+                                err = await self.create_point(
                                     cast(Session, task.session)
                                 )
-                                if created:
+                                if not err:
                                     break
                             case Job.UPDATE_POINT:
-                                updated = await self.update_point(
+                                err = await self.update_point(
                                     task.uid, cast(Message, task.message)
                                 )
-                                if updated:
+                                if not err:
                                     break
                             case Job.DELETE_POINT:
-                                deleted = await self.delete_point(task.uid)
-                                if deleted:
+                                err = await self.delete_point(task.uid)
+                                if not err:
                                     break
                             case Job.UPDATE_PAYLOAD:
-                                updated = await self.update_payload(task.uid, task.name)
-                                if updated:
+                                err = await self.update_payload(task.uid, task.name)
+                                if not err:
                                     break
                     except Exception as e:
                         if attempts < MAX_ATTEMPTS - 1:

@@ -75,6 +75,7 @@ def get_projects(db: Database = Depends(get_mongo_database)):
         )
 
     except Exception as e:
+        logging.error(f"Failed to retrieve projects, An error occured -> {e}")
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={"msg": f"Failed to retrieve projects -> {e}."},
@@ -95,6 +96,7 @@ def get_project(project_id: str, db: Database = Depends(get_mongo_database)):
         )
 
     except Exception as e:
+        logging.error(f"Failed to retrieve project, An error occured -> {e}")
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={"msg": f"Failed to retrieve project -> {e}."},
@@ -117,6 +119,7 @@ def get_projects_exclude(project_id: str, db: Database = Depends(get_mongo_datab
         )
 
     except Exception as e:
+        logging.error(f"Failed to retrieve projects, An error occured -> {e}")
         return JSONResponse(
             status_code=status.HTTP_200_OK,
             content={"msg": f"Failed to retrieve projects -> {e}."},

@@ -3,7 +3,6 @@ import logging
 import json
 from pathlib import Path
 import time
-from typing import cast
 import httpx
 import requests
 import streamlit as st
@@ -29,7 +28,6 @@ from project import (
 
 
 from streamlit_float import float_init
-from streamlit.elements.widgets.chat import ChatInputValue
 from streamlit.runtime.uploaded_file_manager import UploadedFile
 
 # TODO:
@@ -324,7 +322,6 @@ def session_sidebar():
                                 st.session_state.messages = message_req.json()[
                                     "messages"
                                 ]
-                                logging.error(st.session_state.messages)
                                 st.rerun()
 
                             elif message_req.status_code == 404:
@@ -403,92 +400,70 @@ def filter_files_audio(upload_file: list[UploadedFile], audio: UploadedFile | No
 
 
 def chat():
-    if (
-        prompt := st.chat_input(
-            "",
-            key="chat",
-            accept_file="multiple",
-            max_upload_size=20,
-            max_chars=5000,
-            accept_audio=True,
-            file_type=[f_type for f_type in TEXT_EXTS].extend([".png", ".jpeg"]),
-        )
-        or st.session_state.stored_prompt is not None
+    if prompt := st.chat_input(
+        "",
+        key="chat",
+        accept_file="multiple",
+        max_upload_size=20,
+        max_chars=5000,
+        accept_audio=True,
+        file_type=[f_type for f_type in TEXT_EXTS].extend([".png", ".jpeg"]),
     ):
-        prompt = cast(ChatInputValue, prompt)
 
-        if st.session_state.stored_prompt is not None:
-            prompt = st.session_state.stored_prompt
-            st.session_state.stored_prompt = None
+        (
+            st.session_state.chat_files,
+            st.session_state.chat_images,
+            st.session_state.audio,
+        ) = filter_files_audio(prompt.files, prompt.audio)
 
-        if "skip_message" not in st.session_state:
-            st.session_state.skip_message = False
+        if len(st.session_state.chat_images) > 2:
+            st.toast("A maximum of 2 images is allowed per time!")
+            st.stop()
 
-        if not st.session_state.skip_message:
-            (
-                st.session_state.chat_files,
-                st.session_state.chat_images,
-                st.session_state.audio,
-            ) = filter_files_audio(prompt.files, prompt.audio)
+        if len(st.session_state.chat_files) > 3:
+            st.toast("A maximum of 3 files is allowed per time!")
+            st.stop()
 
-            if len(st.session_state.chat_images) > 2:
-                st.toast("A maximum of 2 images is allowed per time!")
-                st.stop()
+        if not st.session_state.ghost_session:
+            if st.session_state.session_id == "":
+                with st.spinner("*creating session*"):
+                    try:
+                        new_session = requests.post(
+                            url=f"{API_URL}/session/create",
+                            json={
+                                "prompt": prompt.text,
+                                "files": st.session_state.chat_files,
+                                "images": st.session_state.chat_images,
+                                "audio": st.session_state.audio,
+                            },
+                        )
 
-            if len(st.session_state.chat_files) > 3:
-                st.toast("A maximum of 3 files is allowed per time!")
-                st.stop()
+                        if new_session.status_code != 201:
+                            resp = new_session.json()
+                            st.toast(
+                                resp["msg"] if "msg" in resp else resp["detail"],
+                                duration=7,
+                            )
+                            st.stop()
 
-        if st.session_state.session_id == "" and not st.session_state.ghost_session:
-            try:
-                create_session = st.empty()
-                create_session.markdown("*creating session...*")
+                        st.session_state.session_id = new_session.json()["id"]
+                        st.session_state.session_uid = new_session.json()["uid"]
+                        st.session_state.session_name = new_session.json()["title"]
+                        st.session_state.update_view = True
+                        st.session_state.show_header = False
 
-                new_session = requests.post(
-                    url=f"{API_URL}/session/create",
-                    json={
-                        "prompt": prompt.text,
-                        "files": st.session_state.chat_files,
-                        "images": st.session_state.chat_images,
-                        "audio": st.session_state.audio,
-                    },
-                )
-
-                if new_session.status_code != 201:
-                    resp = new_session.json()
-                    st.toast(
-                        resp["msg"] if "msg" in resp else resp["detail"],
-                        duration=7,
-                    )
-                    st.stop()
-
-                st.session_state.session_id = new_session.json()["id"]
-                st.session_state.session_uid = new_session.json()["uid"]
-                st.session_state.session_name = new_session.json()["title"]
-                st.session_state.update_view = True
-                st.session_state.stored_prompt = prompt
-                st.session_state.show_header = False
-                st.session_state.skip_message = True
-                create_session.empty()
-                st.rerun()
-
-            except Exception as e:
-                logging.error(f"Failed to complete request to the server -> {e}")
-                st.error(
-                    "Failed to create session \n couldn't communicate with the server."
-                )
-                st.stop()
-
-        if not st.session_state.skip_message:
-            if not st.session_state.ghost_session:
-                start_chat = st.empty()
-                start_chat.markdown("*starting chat...*")
+                    except Exception as e:
+                        logging.error(
+                            f"Failed to complete request to the server -> {e}"
+                        )
+                        st.error(
+                            "Failed to create session \n couldn't communicate with the server."
+                        )
+                        st.stop()
+            else:
                 try:
                     add_msg_response = requests.put(
-                        url=f"{API_URL}/session/msg/"
-                        + st.session_state.session_id
-                        + "/"
-                        + st.session_state.session_uid,
+                        url=f"{API_URL}/session/msg/{st.session_state.session_id}/{st.session_state.session_uid}",
                         json={
                             "role": "user",
                             "content": prompt.text,
@@ -516,8 +491,6 @@ def chat():
                     )
                     st.stop()
 
-                start_chat.empty()
-
         user_bubble(
             prompt.text,
             st.session_state.chat_images,
@@ -534,9 +507,6 @@ def chat():
                 "audio": st.session_state.audio,
             }
         )
-
-        if st.session_state.skip_message:
-            st.session_state.skip_message = False
 
         try:
 
