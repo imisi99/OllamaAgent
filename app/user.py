@@ -193,3 +193,17 @@ def add_memory():
                     st.error(
                         "Failed to create memory \n couldn't communicate with the server."
                     )
+
+
+@st.dialog("View Settings")
+def view_settings():
+    st.session_state.active_dialog = ""
+    if st.button("Rename", use_container_width=True):
+        st.session_state.active_dialog = "rename_user"
+        st.rerun()
+    if st.button("Memory", use_container_width=True):
+        st.session_state.active_dialog = "user_memory"
+        st.rerun()
+    if st.button("Add", use_container_width=True):
+        st.session_state.active_dialog = "add_memory"
+        st.rerun()

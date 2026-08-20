@@ -226,7 +226,17 @@ class Database:
 
         return cast(list[Session], sessions)
 
-    def fetch_all_project_exclude_session(self):
+    def fetch_all_project_exclude_one(self, project_id: str) -> list[Project]:
+        with self.project_collection.find(
+            {"_id": {"$ne": ObjectId(project_id)}}
+        ) as cursor:
+            projects = list(cursor)
+
+        for project in projects:
+            project["_id"] = str(project["_id"])
+            project["created_at"] = self.denormalize_timestamp(project["created_at"])
+
+        return cast(list[Project], projects)
 
     def fetch_session_for_redis(
         self, session_id: str
@@ -369,7 +379,7 @@ class Database:
     def delete_session(self, session_id: str) -> CustomError | None:
         result = self.session_collection.delete_one({"_id": ObjectId(session_id)})
 
-        if not result.acknowledged:
+        if result.deleted_count != 1:
             return CustomError(
                 message="Deleting of session was not acknowledged", code=500
             )

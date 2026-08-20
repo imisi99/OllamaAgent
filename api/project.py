@@ -101,6 +101,28 @@ def get_project(project_id: str, db: Database = Depends(get_mongo_database)):
         )
 
 
+@project.get("/project/all/exclude/{project_id}")
+def get_projects_exclude(project_id: str, db: Database = Depends(get_mongo_database)):
+    try:
+        projects = db.fetch_all_project_exclude_one(project_id)
+
+        if len(projects) == 0:
+            return JSONResponse(
+                content={"msg": "No project found."},
+                status_code=status.HTTP_404_NOT_FOUND,
+            )
+
+        return JSONResponse(
+            status_code=status.HTTP_200_OK, content={"projects": projects}
+        )
+
+    except Exception as e:
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={"msg": f"Failed to retrieve projects -> {e}."},
+        )
+
+
 @project.put("/project/add/{project_id}")
 def add_to_project(
     session: UpdateProjectSession,

@@ -7,14 +7,16 @@ from typing import cast
 import httpx
 import requests
 import streamlit as st
+import warnings
 
 from session import (
     add_a_session_to_project,
+    change_session_project,
     rename_sess,
     delete_sess,
     find_similar_sess,
 )
-from user import rename_user, user_memory, add_memory
+from user import rename_user, user_memory, add_memory, view_settings
 from project import (
     edit_project,
     view_project,
@@ -35,6 +37,8 @@ from streamlit.runtime.uploaded_file_manager import UploadedFile
 # Add the audio functionality use a STT
 # Add the audio implementatoin
 
+
+warnings.filterwarnings("ignore", message=".*st.components.v1.html.*")
 logging.basicConfig(level=logging.INFO)
 
 float_init()
@@ -142,32 +146,6 @@ def user_profile():
             st.session_state.active_dialog = "view_settings"
             st.rerun()
 
-        @st.dialog("View Settings")
-        def view_settings():
-            st.session_state.active_dialog = ""
-            if st.button("Rename", use_container_width=True):
-                st.session_state.active_dialog = "rename_user"
-                st.rerun()
-            if st.button("Memory", use_container_width=True):
-                st.session_state.active_dialog = "user_memory"
-                st.rerun()
-            if st.button("Add", use_container_width=True):
-                st.session_state.active_dialog = "add_memory"
-                st.rerun()
-
-        while st.session_state.get("active_dialog", "") != "":
-            match st.session_state.active_dialog:
-                case "view_settings":
-                    view_settings()
-                case "rename_user":
-                    rename_user()
-                case "user_memory":
-                    user_memory()
-                case "add_memory":
-                    add_memory()
-                case _:
-                    break
-
 
 def display_session_actions():
     if not st.session_state.ghost_session and not st.session_state.show_header:
@@ -178,36 +156,39 @@ def display_session_actions():
             else st.session_state.session_name
         )
 
-        def sess_actions():
-            rename, delete, find, project = st.columns(
-                [1, 1, 1, 1], vertical_alignment="center"
-            )
-            if rename.button("Rename"):
-                st.session_state.active_dialog = "rename_sess"
-                st.rerun()
-            if find.button("Similar"):
-                st.session_state.active_dialog = "find_similar_sess"
-                st.rerun()
-            if st.session_state.session_pid == "":
-                if project.button("Add Project"):
-                    st.session_state.active_dialog = "add_a_session"
-                    st.rerun()
-            else:
-                if project.button("View Project"):
-                    st.session_state.active_dialog = "view_project"
-                    st.rerun()
-            if delete.button("Delete", type="primary"):
-                st.session_state.active_dialog = "delete_sess"
-                st.rerun()
-
-        session_actions = st.container()
+        session_actions = st.container(key="floating_session_actions")
 
         with session_actions:
             with st.expander(name):
-                sess_actions()
+                rename, delete, find, project = st.columns(
+                    [1, 1, 1, 1], vertical_alignment="center"
+                )
+                if rename.button("Rename"):
+                    st.session_state.active_dialog = "rename_sess"
+                    st.rerun()
+                if find.button("Similar"):
+                    st.session_state.active_dialog = "find_similar_sess"
+                    st.rerun()
+                if st.session_state.session_pid == "":
+                    if project.button("Add Project"):
+                        st.session_state.active_dialog = "add_a_session"
+                        st.rerun()
+                else:
+                    view, change = project.columns([1, 1], vertical_alignment="center")
+                    if view.button("View Project"):
+                        st.session_state.active_dialog = "view_project"
+                        st.rerun()
+                    if change.button("Change Project"):
+                        st.session_state.active_dialog = "change_project"
+                        st.rerun()
+                if delete.button("Delete", type="primary"):
+                    st.session_state.active_dialog = "delete_sess"
+                    st.rerun()
 
         session_actions.float(
-            "top: 60px; background-color: rgba(38, 39, 48, 0.75); backdrop-filter: blur(8px); --webkit-backdrop-filter: blur(8px); z-index: 9999;"
+            "top: 60px; left: 35%; right: 0; width: 30%; max-height: 220px; overflow-y: auto; "
+            "background-color: rgba(38, 39, 48, 0.75); backdrop-filter: blur(8px); "
+            "-webkit-backdrop-filter: blur(8px); z-index: 9999;"
         )
 
 
@@ -282,27 +263,6 @@ def session_sidebar():
             st.session_state.active_dialog = "view_projects"
             st.rerun()
 
-        while st.session_state.get("active_dialog", "") != "":
-            match st.session_state.active_dialog:
-                case "view_projects":
-                    view_projects()
-                case "view_project":
-                    view_project()
-                case "create_project":
-                    create_project()
-                case "edit_project":
-                    edit_project()
-                case "remove_sessions":
-                    remove_session_from_project()
-                case "add_sessions":
-                    add_session_to_project()
-                case "add_a_session":
-                    add_a_session_to_project()
-                case "delete_project":
-                    delete_project()
-                case _:
-                    break
-
         if st.button(
             "New Chat",
             icon=":material/add:",
@@ -358,7 +318,7 @@ def session_sidebar():
                             if message_req.status_code == 200:
                                 st.session_state.session_id = session["_id"]
                                 st.session_state.session_uid = session["uuid"]
-                                st.session_state.session_uid = session["project_id"]
+                                st.session_state.session_pid = session["project_id"]
                                 st.session_state.ghost_session = False
                                 st.session_state.show_header = False
                                 st.session_state.messages = message_req.json()[
@@ -677,6 +637,47 @@ def display_session_message():
             st.markdown(msg["content"], text_alignment="justify")
 
 
+def open_active_dialog():
+    while st.session_state.get("active_dialog", "") != "":
+        match st.session_state.active_dialog:
+            case "view_settings":
+                view_settings()
+            case "rename_user":
+                rename_user()
+            case "user_memory":
+                user_memory()
+            case "add_memory":
+                add_memory()
+            case "rename_sess":
+                rename_sess()
+            case "find_similar_sess":
+                find_similar_sess()
+            case "add_a_session":
+                add_a_session_to_project()
+            case "delete_sess":
+                delete_sess()
+            case "change_project":
+                change_session_project()
+            case "view_projects":
+                view_projects()
+            case "view_project":
+                view_project()
+            case "create_project":
+                create_project()
+            case "edit_project":
+                edit_project()
+            case "remove_sessions":
+                remove_session_from_project()
+            case "add_sessions":
+                add_session_to_project()
+            case "add_a_session":
+                add_a_session_to_project()
+            case "delete_project":
+                delete_project()
+            case _:
+                break
+
+
 if "show_header" not in st.session_state:
     st.session_state.show_header = True
 
@@ -700,8 +701,10 @@ if "active_dialog" not in st.session_state:
 
 header()
 
+open_active_dialog()
 
 get_or_create_user()
+
 user_profile()
 session_sidebar()
 
