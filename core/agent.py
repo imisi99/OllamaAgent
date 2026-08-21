@@ -82,17 +82,17 @@ class Model:
 
             return state
 
-        def maybe_summarize(state: SessionState) -> SessionState:
+        async def maybe_summarize(state: SessionState) -> SessionState:
             session_id = state["session_id"]
             redDB = get_redis_database()
             msg = redDB.get_short_term_memory(session_id)
             images = []
-            if len(msg) > 30:
+            if len(msg) >= 6:
                 for m in msg:
                     if len(m["images"]) > 0:
                         images.extend(m["images"])
 
-                summarized = self.summarize_messages(msg)
+                summarized = await self.summarize_messages(msg)
                 if summarized is None:
                     return state
                 redDB.clear_short_term_memory(session_id)
@@ -212,16 +212,16 @@ class Model:
 
         graph = StateGraph(state_schema=SessionState)
 
-        graph.add_node("maybe_summarize", maybe_summarize)
         graph.add_node("update_memory", update_memory)
         graph.add_node("embed_retrieve_file_chunks", embed_and_retrieve_chunks)
         graph.add_node("run_agent", run_agent)
+        graph.add_node("maybe_summarize", maybe_summarize)
 
-        graph.set_entry_point("maybe_summarize")
-        graph.add_edge("maybe_summarize", "update_memory")
+        graph.set_entry_point("update_memory")
         graph.add_edge("update_memory", "embed_retrieve_file_chunks")
         graph.add_edge("embed_retrieve_file_chunks", "run_agent")
-        graph.add_edge("run_agent", END)
+        graph.add_edge("run_agent", "maybe_summarize")
+        graph.add_edge("maybe_summarize", END)
 
         return graph.compile()
 
@@ -423,7 +423,7 @@ class Model:
             logging.error(f"Failed to generate title -> {e}")
         return title
 
-    def summarize_messages(
+    async def summarize_messages(
         self, messages: list[Message] | list[QMessage]
     ) -> str | None:
         conversation = "\n".join(f"{m['role']}: {m['content']}" for m in messages)
@@ -431,14 +431,27 @@ class Model:
         prompt = ChatPromptTemplate.from_messages(
             [
                 SystemMessage(
-                    content="Summarize the following conversation concisely, preserving key facts and context."
+                    content="You are generating a summary of a conversation for use in a "
+                    "semantic search / embedding index. This summary will be embedded "
+                    "and later retrieved by similarity search, so it must densely "
+                    "preserve the topics, entities, and specific details discussed.\n\n"
+                    "Rules:\n"
+                    "- Do NOT critique, judge, or evaluate correctness of anything said.\n"
+                    "- Do NOT add your own opinions, analysis, or commentary.\n"
+                    "- Just describe what was discussed, asked, and explained, as factually "
+                    "and neutrally as possible.\n"
+                    "- Include specific keywords, names, entities, and terms verbatim where "
+                    "possible (helps retrieval matching).\n"
+                    "- Write it as a compact list of topics/facts, not flowing prose.\n"
+                    "- Keep it under 350 words, but shorter if the conversation itself is short "
+                    "or low on substantive content — don't pad the summary."
                 ),
                 HumanMessage(content=conversation),
             ]
         )
 
         chain = prompt | self.no_reason
-        response = chain.invoke({})
+        response = await chain.ainvoke({})
         self.log_llm_response([response], "SUMMARIZER")
         if isinstance(response.content, str):
             return response.content

@@ -17,7 +17,9 @@ class EmbeddingModel:
         info = {}
 
         if len(session["messages"]) >= 4:
-            info["message"] = agent.get_model().summarize_messages(session["messages"])
+            info["message"] = await agent.get_model().summarize_messages(
+                session["messages"]
+            )
         else:
             info["message"] = [{"msg": msg["content"]} for msg in session["messages"]]
 

@@ -78,7 +78,6 @@ def view_project():
 
     if "project_session" not in st.session_state:
         st.session_state.project_session = []
-        st.session_state.update_s_project_view = True
 
     back, edit, delete = st.columns([7, 1, 1], vertical_alignment="top")
     if back.button("Go to Projects", type="tertiary"):
@@ -105,32 +104,28 @@ def view_project():
         st.session_state.active_dialog = "remove_sessions"
         st.rerun()
 
-    if st.session_state.get("update_s_project_view"):
-        with st.spinner():
-            st.session_state.project_session = []
-            try:
-                project_req = requests.get(
-                    url=f"{API_URL}/project/{st.session_state.project_id}"
-                )
+    with st.spinner():
+        st.session_state.project_session = []
+        try:
+            project_req = requests.get(
+                url=f"{API_URL}/project/{st.session_state.project_id}"
+            )
 
-                match project_req.status_code:
-                    case 404:
-                        st.info("This project doesn't exist")
-                    case 200:
-                        st.session_state.update_s_project_view = False
-                        st.session_state.project_session = project_req.json()[
-                            "sessions"
-                        ]
-                    case _:
-                        resp = project_req.json()
-                        st.toast(
-                            (resp["msg"] if "msg" in resp else resp["detail"]),
-                            duration=6,
-                        )
-                        st.stop()
-            except Exception as e:
-                logging.error(f"Failed to complete request to the server -> {e}")
-                st.error("Failed to view project... server error.")
+            match project_req.status_code:
+                case 404:
+                    st.info("This project doesn't exist")
+                case 200:
+                    st.session_state.project_session = project_req.json()["sessions"]
+                case _:
+                    resp = project_req.json()
+                    st.toast(
+                        (resp["msg"] if "msg" in resp else resp["detail"]),
+                        duration=6,
+                    )
+                    st.stop()
+        except Exception as e:
+            logging.error(f"Failed to complete request to the server -> {e}")
+            st.error("Failed to view project... server error.")
 
     for session in st.session_state.project_session:
         if st.button(session["name"]):
@@ -300,7 +295,6 @@ def add_session_to_project():
                             case 202:
                                 st.toast("sessions added successfully")
                                 st.session_state.active_dialog = "view_project"
-                                st.session_state.update_s_project_view = True
                                 time.sleep(0.8)
                                 st.rerun()
                             case _:
@@ -346,7 +340,6 @@ def remove_session_from_project():
                             case 202:
                                 st.toast("sessions removed successfully")
                                 st.session_state.active_dialog = "view_project"
-                                st.session_state.update_s_project_view = True
                                 time.sleep(0.8)
                                 st.rerun()
                             case _:

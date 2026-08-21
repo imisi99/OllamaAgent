@@ -220,7 +220,7 @@ async def find_related_sessions(
     if summarize_chat:
         for session in sessions:
             chats.append(
-                f"{session['name']}: \nSUMMARY: \n{get_model().summarize_messages(session['messages'])}"
+                f"{session['name']}: \nSUMMARY: \n{await get_model().summarize_messages(session['messages'])}"
             )
     else:
         for session in sessions:

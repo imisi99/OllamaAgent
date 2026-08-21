@@ -11,6 +11,7 @@ import warnings
 from session import (
     add_a_session_to_project,
     change_session_project,
+    remove_session,
     rename_sess,
     delete_sess,
     find_similar_sess,
@@ -158,33 +159,71 @@ def display_session_actions():
 
         with session_actions:
             with st.expander(name):
-                rename, delete, find, project = st.columns(
-                    [1, 1, 1, 1], vertical_alignment="center"
-                )
-                if rename.button("Rename"):
+                if st.session_state.session_pid == "":
+                    rename, find, project, delete = st.columns(
+                        [1, 1, 1, 1], vertical_alignment="center"
+                    )
+                else:
+                    rename, find, project, delete = st.columns(
+                        [1, 1, 2, 1], vertical_alignment="center"
+                    )
+
+                if rename.button("Rename", use_container_width=True):
                     st.session_state.active_dialog = "rename_sess"
                     st.rerun()
-                if find.button("Similar"):
+                if find.button("Similar", use_container_width=True):
                     st.session_state.active_dialog = "find_similar_sess"
                     st.rerun()
                 if st.session_state.session_pid == "":
-                    if project.button("Add Project"):
+                    if project.button("Add Project", use_container_width=True):
                         st.session_state.active_dialog = "add_a_session"
                         st.rerun()
                 else:
                     view, change = project.columns([1, 1], vertical_alignment="center")
-                    if view.button("View Project"):
-                        st.session_state.active_dialog = "view_project"
-                        st.rerun()
-                    if change.button("Change Project"):
+                    if view.button("View Project", use_container_width=True):
+                        with st.spinner(""):
+                            try:
+                                project_req = requests.get(
+                                    f"{API_URL}/project/{st.session_state.session_pid}"
+                                )
+                                resp = project_req.json()
+                                match project_req.status_code:
+                                    case 200:
+                                        st.session_state.project_id = (
+                                            st.session_state.session_pid
+                                        )
+                                        st.session_state.project_name = resp["project"][
+                                            "name"
+                                        ]
+                                        st.session_state.project_goal = resp["project"][
+                                            "goal"
+                                        ]
+                                        st.session_state.active_dialog = "view_project"
+                                        st.rerun()
+                                    case _:
+                                        st.toast(
+                                            (
+                                                resp["msg"]
+                                                if "msg" in resp
+                                                else resp["detail"]
+                                            ),
+                                            duration=7,
+                                        )
+                            except Exception as e:
+                                logging.error(
+                                    f"Failed to complete request to the server -> {e}"
+                                )
+                                st.toast("Failed to fetch project... server error ")
+
+                    if change.button("Change", use_container_width=True):
                         st.session_state.active_dialog = "change_project"
                         st.rerun()
-                if delete.button("Delete", type="primary"):
+                if delete.button("Delete", type="primary", use_container_width=True):
                     st.session_state.active_dialog = "delete_sess"
                     st.rerun()
 
         session_actions.float(
-            "top: 60px; left: 35%; right: 0; width: 30%; max-height: 220px; overflow-y: auto; "
+            "top: 60px; left: 35%; right: 0; width: 35%; max-height: 220px; overflow-y: auto; "
             "background-color: rgba(38, 39, 48, 0.75); backdrop-filter: blur(8px); "
             "-webkit-backdrop-filter: blur(8px); z-index: 9999;"
         )
@@ -636,6 +675,8 @@ def open_active_dialog():
                 create_project()
             case "edit_project":
                 edit_project()
+            case "remove_session":
+                remove_session()
             case "remove_sessions":
                 remove_session_from_project()
             case "add_sessions":

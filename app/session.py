@@ -223,13 +223,16 @@ def add_a_session_to_project():
             ):
                 try:
                     project_req = requests.put(
-                        url=f"{API_URL}/project/add/{st.session_state.project_id}",
+                        url=f"{API_URL}/project/add/{project["_id"]}",
                         json={"ids": [st.session_state.session_id]},
                     )
 
                     match project_req.status_code:
                         case 202:
                             st.toast("session added successfully")
+                            st.session_state.session_pid = project["_id"]
+                            st.session_state.tmp_name = project["name"]
+                            st.session_state.tmp_goal = project["goal"]
                             time.sleep(0.8)
                             st.rerun()
                         case _:
@@ -249,6 +252,14 @@ def change_session_project():
     st.session_state.active_dialog = ""
 
     if st.button("Back to Session", type="tertiary"):
+        st.rerun()
+
+    if st.button("Remove Session", icon=":material/remove:", type="tertiary"):
+        st.session_state.active_dialog = "remove_session"
+        st.rerun()
+
+    if st.button("New Project", icon=":material/add:", type="tertiary"):
+        st.session_state.active_dialog = "create_project"
         st.rerun()
 
     projects = []
@@ -296,6 +307,7 @@ def change_session_project():
                     match project_req.status_code:
                         case 202:
                             st.toast("session added successfully")
+                            st.session_state.session_pid = project["_id"]
                             time.sleep(0.8)
                             st.rerun()
                         case _:
@@ -308,6 +320,41 @@ def change_session_project():
                 except Exception as e:
                     logging.error(f"Failed to complete request to the server -> {e}")
                     st.error("Failed to add session to project... server error.")
+
+
+@st.dialog("Remove Session")
+def remove_session():
+    st.session_state.active_dialog = ""
+    if st.button("Go back", type="tertiary"):
+        st.session_state.active_dialog = "change_session"
+        st.rerun()
+
+    with st.container(horizontal=True, horizontal_alignment="right"):
+        if st.button("remove", type="primary"):
+            with st.spinner():
+                try:
+                    project_req = requests.delete(
+                        url=f"{API_URL}/project/remove/{st.session_state.session_pid}",
+                        json={"ids": [st.session_state.session_id]},
+                    )
+
+                    match project_req.status_code:
+                        case 202:
+                            st.toast("sessions removed successfully")
+                            st.session_state.active_dialog = "view_project"
+                            st.session_state.session_pid = ""
+                            time.sleep(0.8)
+                            st.rerun()
+                        case _:
+                            resp = project_req.json()
+                            st.toast(
+                                (resp["msg"] if "msg" in resp else resp["detail"]),
+                                duration=6,
+                            )
+
+                except Exception as e:
+                    logging.error(f"Failed to complete request to the server -> {e}")
+                    st.error("Failed to remove sessions from project... server error.")
 
 
 def remove_active_session_from_sessions():

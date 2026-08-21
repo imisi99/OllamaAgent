@@ -49,6 +49,7 @@ async def lifespan(app: FastAPI):
             keep_alive="15m",
             reasoning=True,
             verbose=True,
+            num_ctx=8192,
         )
         no_reason = ChatOllama(
             model="qwen3.5:4b",
@@ -56,6 +57,7 @@ async def lifespan(app: FastAPI):
             keep_alive="15m",
             reasoning=False,
             verbose=True,
+            num_ctx=8192,
         )
 
         embed = OllamaEmbeddings(
