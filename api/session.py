@@ -1,4 +1,3 @@
-import copy
 import logging
 import datetime
 from uuid import uuid4
@@ -12,6 +11,7 @@ from core.qdrant import Job, Qdrant, Task
 from db.mongo import get_mongo_database
 from db.qdrant import get_qdrant_database
 from schemas.mongo import Message, Session
+from schemas.qdrant import QMessage, QSession
 from schemas.session import (
     CreateSession,
     SimilarSessions,
@@ -58,14 +58,13 @@ def create_session(
             "name": title,
         }
 
-        err, id = db.create_session(copy.deepcopy(sess))
+        err, id = db.create_session(sess)
 
         if err:
             return JSONResponse(content={"msg": err.message}, status_code=err.code)
 
-        sess["_id"] = id
-
-        qdb.add_job(Task(job=Job.CREATE_POINT, session=sess))
+        q_sess = QSession(id=id, uuid=uid, name=sess["name"], project_id="")
+        qdb.add_job(Task(job=Job.CREATE_POINT, session=q_sess))
 
         message = Message(
             {
@@ -82,10 +81,12 @@ def create_session(
 
         err = db.create_message(message)
 
+        msg = QMessage(role="user", content=message["content"])
+
         if err:
             return JSONResponse(content={"msg": err.message}, status_code=err.code)
 
-        qdb.add_job(Task(job=Job.UPDATE_POINT, uid=uid, message=message))
+        qdb.add_job(Task(job=Job.UPDATE_POINT, uid=uid, message=msg))
 
         return JSONResponse(
             status_code=status.HTTP_201_CREATED,
@@ -156,12 +157,13 @@ def add_message(
         message["timestamp"] = datetime.datetime.now()
         message["session_id"] = session_id
 
-        err = db.create_message(copy.deepcopy(message))
+        err = db.create_message(message)
 
         if err:
             return JSONResponse(content={"msg": err.message}, status_code=err.code)
 
-        qdb.add_job(Task(job=Job.UPDATE_POINT, uid=session_uid, message=message))
+        msg = QMessage(role="user", content=message["content"])
+        qdb.add_job(Task(job=Job.UPDATE_POINT, uid=session_uid, message=msg))
 
         return JSONResponse(
             status_code=status.HTTP_202_ACCEPTED,

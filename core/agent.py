@@ -61,6 +61,11 @@ class Model:
 
         return agent
 
+    def _extract_content(self, msg: Message | QMessage) -> tuple[str, str]:
+        if isinstance(msg, QMessage):
+            return msg.role, msg.content
+        return msg["role"], msg["content"]
+
     def build_graph(self, agent):
         def update_memory(state: SessionState) -> SessionState:
             get_redis_database().add_short_term_memory(
@@ -426,7 +431,10 @@ class Model:
     async def summarize_messages(
         self, messages: list[Message] | list[QMessage]
     ) -> str | None:
-        conversation = "\n".join(f"{m['role']}: {m['content']}" for m in messages)
+        conversation = "\n".join(
+            f"{role}: {content}"
+            for role, content in map(self._extract_content, messages)
+        )
 
         prompt = ChatPromptTemplate.from_messages(
             [

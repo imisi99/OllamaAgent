@@ -14,7 +14,6 @@ from core.agent import get_model
 from db.mongo import get_mongo_database
 from db.qdrant import get_qdrant_database
 from schemas.agent import SessAgentState
-from schemas.qdrant import QSession
 
 
 @tool
@@ -199,44 +198,35 @@ async def find_related_sessions(
         limit: This is the limit for the number of sessions to retrieve it might retrieve lower than the limit if few document pass the threshold (this defaults to 2)
         summarize_chat: This indicates whether to summarize the retrieved chats if the number of retrieved chat is high (limit >= 2 then it should be True) (this defaults to True)
     """
-    err, result = await get_qdrant_database().get_related_points(
+    result = await get_qdrant_database().get_related_points(
         state["session_uid"], query, score_threshold, use_query, limit
     )
 
-    if err:
+    if result.err:
         return "An error occured while trying to get related sessions."
 
-    if not result:
+    if len(result.sessions) == 0:
         return "No related session available"
-
-    avg_score = result[1]
-
-    sessions: list[QSession] = []
-
-    for session, _ in result[0]:
-        sessions.append(session)
 
     chats = []
     if summarize_chat:
-        for session in sessions:
+        for session in result.sessions:
             chats.append(
-                f"{session['name']}: \nSUMMARY: \n{await get_model().summarize_messages(session['messages'])}"
+                f"{session.name}: \nSUMMARY: \n{await get_model().summarize_messages(session.messages)}"
             )
     else:
-        for session in sessions:
-            msg = "\n".join(
-                f"{msg['role']}: {msg['content']}" for msg in session["messages"]
-            )
-            chats.append(f"{session['name']}: \n{msg}")
+        for session in result.sessions:
+            msg = "\n".join(f"{msg.role}: {msg.content}" for msg in session.messages)
+            chats.append(f"{session.name}: \n{msg}")
 
     logging.info(f"Retrieval information for session with id {state['session_id']}")
 
     logging.info(
-        f"SCORE THRESHOLD -> {score_threshold}, LIMIT -> {limit}, AVERAGE SCORE -> {avg_score}, QUERY -> {query}, USE QUERY -> {use_query}"
+        f"SCORE THRESHOLD -> {score_threshold}, LIMIT -> {limit}, AVERAGE SCORE -> {result.score}, QUERY -> {query}, USE QUERY -> {use_query}"
     )
 
     logging.info(
-        f"RELEVANCE: \n{'\n'.join(f'ID -> {sess["_id"]}, NAME -> {sess["name"]}, SCORE -> {score}' for sess, score in result[0])}"
+        f"RELEVANCE: \n{'\n'.join(f'ID -> {sess.id}, NAME -> {sess.name}, SCORE -> {score}' for sess, score in result.sessions.items())}"
     )
 
     if summarize_chat:

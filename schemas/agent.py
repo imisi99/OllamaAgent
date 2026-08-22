@@ -1,6 +1,8 @@
 from typing import TypedDict
 from langchain.agents import AgentState
 
+from schemas.qdrant import QChunk
+
 
 from .mongo import Message
 
@@ -15,7 +17,7 @@ class SessionConversation(TypedDict):
 
 class SessionState(SessionConversation):
     response: str
-    chunks: list[str]
+    chunks: list[QChunk]
 
 
 class SessAgentState(AgentState):

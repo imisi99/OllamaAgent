@@ -6,7 +6,7 @@ from typing import Optional
 from core import agent
 from schemas.qdrant import QSession
 
-# TODO: Work on the excedding limit for the update (a newer model ? )
+# TODO: Work on the summarizer not calling on every turn after reaching the point for calling
 
 
 class EmbeddingModel:
@@ -16,12 +16,12 @@ class EmbeddingModel:
     async def generate_vector_embedding(self, session: QSession) -> list[float]:
         info = {}
 
-        if len(session["messages"]) >= 4:
+        if len(session.messages) >= 4:
             info["message"] = await agent.get_model().summarize_messages(
-                session["messages"]
+                session.messages
             )
         else:
-            info["message"] = [{"msg": msg["content"]} for msg in session["messages"]]
+            info["message"] = [{"msg": msg.content} for msg in session.messages]
 
         text = json.dumps(info)
         vector = await self.EMB_MODEL.aembed_query(text)

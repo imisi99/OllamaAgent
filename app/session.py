@@ -96,8 +96,7 @@ def find_similar_sess():
         "Enter threshold", min_value=0.0, max_value=1.0, value=0.5
     )
     limit = st.number_input("Enter limit", min_value=1, max_value=100, value=5)
-    if st.button("Find Sessions") or st.session_state.get("find_session"):
-        st.session_state.find_session = True
+    if st.button("Find Sessions"):
         with st.spinner("Finding sessions..."):
             try:
                 similar_req = requests.get(
@@ -110,6 +109,7 @@ def find_similar_sess():
                 )
 
                 if similar_req.status_code == 200:
+                    st.write(similar_req.json())
                     sessions, avgScore = (
                         similar_req.json()["sessions"],
                         similar_req.json()["score"],
@@ -164,7 +164,6 @@ def find_similar_sess():
                             st.write(sess[1])
 
                 else:
-                    st.session_state.find_session = False
                     resp = similar_req.json()
                     st.info(resp["msg"] if "msg" in resp else resp["detail"])
             except Exception as e:
@@ -199,6 +198,7 @@ def add_a_session_to_project():
                     case 200:
                         st.session_state.projects = projects_req.json()["projects"]
                         st.session_state.update_project_view = False
+                        st.session_state.update_view = True
                     case _:
                         resp = projects_req.json()
                         st.toast(
@@ -308,6 +308,7 @@ def change_session_project():
                         case 202:
                             st.toast("session added successfully")
                             st.session_state.session_pid = project["_id"]
+                            st.session_state.update_view = True
                             time.sleep(0.8)
                             st.rerun()
                         case _:
@@ -325,6 +326,7 @@ def change_session_project():
 @st.dialog("Remove Session")
 def remove_session():
     st.session_state.active_dialog = ""
+
     if st.button("Go back", type="tertiary"):
         st.session_state.active_dialog = "change_session"
         st.rerun()
@@ -341,8 +343,8 @@ def remove_session():
                     match project_req.status_code:
                         case 202:
                             st.toast("sessions removed successfully")
-                            st.session_state.active_dialog = "view_project"
                             st.session_state.session_pid = ""
+                            st.session_state.update_view = True
                             time.sleep(0.8)
                             st.rerun()
                         case _:

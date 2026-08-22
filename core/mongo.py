@@ -384,6 +384,13 @@ class Database:
                 message="Deleting of session was not acknowledged", code=500
             )
 
+        result = self.message_collection.delete_many({"session_id": session_id})
+
+        if result.deleted_count == 0:
+            return CustomError(
+                message="Deleting of session messages was not acknowledged", code=500
+            )
+
     def delete_project(self, project_id: str) -> CustomError | None:
         project = self.project_collection.find_one({"_id": ObjectId(project_id)})
 

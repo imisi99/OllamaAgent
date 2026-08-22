@@ -637,6 +637,7 @@ def chat():
 
 
 def display_session_message():
+    st.write(st.session_state.session_pid)
     for msg in st.session_state.messages:
         if msg["role"] == "user":
             user_bubble(msg["content"], msg["images"], msg["files"], msg["audio"])

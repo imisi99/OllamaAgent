@@ -12,6 +12,7 @@ from db.mongo import get_mongo_database
 from db.qdrant import get_qdrant_database
 from schemas.agent import SessionConversation, SessionState
 from schemas.mongo import Message
+from schemas.qdrant import QMessage
 
 serve = APIRouter()
 
@@ -93,8 +94,9 @@ async def stream_chat(
                     )
                     return JSONResponse(status_code=err.code, content=err.message)
 
+                msg = QMessage(role="agent", content=full_response)
                 qdb.add_job(
-                    Task(Job.UPDATE_POINT, uid=input["session_uid"], message=message)
+                    Task(Job.UPDATE_POINT, uid=input["session_uid"], message=msg)
                 )
 
     asyncio.create_task(run_and_save())
