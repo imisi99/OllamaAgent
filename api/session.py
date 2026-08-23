@@ -19,7 +19,7 @@ from schemas.session import (
 
 session = APIRouter()
 
-# TODO: Deleting sessions have to cascade to messages also
+# DONE: Deleting sessions have to cascade to messages also
 # Making a message is also trigerring the summarizer from where ?
 
 
@@ -279,7 +279,12 @@ async def fetch_similar_sessions(
             limit=details.limit,
         )
 
-        if result is None:
+        if result.err:
+            return JSONResponse(
+                status_code=result.err.code, content={"msg": result.err.message}
+            )
+
+        if not result.sessions:
             return JSONResponse(
                 status_code=status.HTTP_404_NOT_FOUND,
                 content={
@@ -287,11 +292,9 @@ async def fetch_similar_sessions(
                 },
             )
 
-        points, avgScore = result
-
         return JSONResponse(
             status_code=status.HTTP_200_OK,
-            content={"score": avgScore, "sessions": points},
+            content={"score": result.score, "sessions": result.sessions},
         )
 
     except Exception as e:

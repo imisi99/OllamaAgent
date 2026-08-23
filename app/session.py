@@ -97,7 +97,7 @@ def find_similar_sess():
     )
     limit = st.number_input("Enter limit", min_value=1, max_value=100, value=5)
     if st.button("Find Sessions"):
-        with st.spinner("Finding sessions..."):
+        with st.spinner("*finding sessions...*"):
             try:
                 similar_req = requests.get(
                     url=f"{API_URL}/session/find/similar",
@@ -108,64 +108,67 @@ def find_similar_sess():
                     },
                 )
 
-                if similar_req.status_code == 200:
-                    st.write(similar_req.json())
-                    sessions, avgScore = (
-                        similar_req.json()["sessions"],
-                        similar_req.json()["score"],
-                    )
+                match similar_req.status_code:
+                    case 200:
+                        sessions, score = (
+                            similar_req.json()["sessions"],
+                            similar_req.json()["score"],
+                        )
 
-                    st.write(
-                        f" Retrieved {len(sessions)} sessions with an average score of -> {avgScore}"
-                    )
+                        st.write(
+                            f" Retrieved {len(sessions)} sessions with an average score of -> {score}"
+                        )
 
-                    similar_col1, similar_col2 = st.columns([4, 1])
-                    for sess in sessions:
-                        with similar_col1:
-                            load_sess_id = sess[0]["_id"]
-                            load_sess_uid = sess[0]["uuid"]
-                            if st.button(sess[0]["name"]):
-                                try:
-                                    message_req = requests.get(
-                                        url=f"{API_URL}/session/" + load_sess_id,
-                                    )
-
-                                    resp = message_req.json()
-
-                                    if message_req.status_code == 200:
-                                        st.session_state.session_id = load_sess_id
-                                        st.session_state.session_uid = load_sess_uid
-                                        st.session_state.ghost_session = False
-                                        st.session_state.show_header = False
-                                        st.session_state.messages = resp["session"][
-                                            "messages"
-                                        ]
-                                        st.session_state.find_session = False
-                                        st.session_state.session_name = resp["session"][
-                                            "name"
-                                        ]
-                                        st.rerun()
-                                    else:
-                                        st.toast(
-                                            (
-                                                resp["msg"]
-                                                if "msg" in resp
-                                                else resp["detail"]
-                                            ),
-                                            duration=7,
+                        col1, col2 = st.columns([4, 1], vertical_alignment="center")
+                        for sess, score in sessions.items():
+                            with col1:
+                                if st.button(sess["name"]):
+                                    try:
+                                        message_req = requests.get(
+                                            url=f"{API_URL}/session/" + sess["id"],
                                         )
-                                except Exception as e:
-                                    st.toast("Unable to load the session.")
-                                    logging.error(
-                                        f"Failed to load session with id -> {load_sess_id}, err -> {e}"
-                                    )
 
-                        with similar_col2:
-                            st.write(sess[1])
+                                        resp = message_req.json()
 
-                else:
-                    resp = similar_req.json()
-                    st.info(resp["msg"] if "msg" in resp else resp["detail"])
+                                        if message_req.status_code == 200:
+                                            st.session_state.session_id = sess["id"]
+                                            st.session_state.session_uid = sess["uuid"]
+                                            st.session_state.session_pid = sess[
+                                                "project_id"
+                                            ]
+                                            st.session_state.ghost_session = False
+                                            st.session_state.show_header = False
+                                            st.session_state.messages = resp["session"][
+                                                "messages"
+                                            ]
+                                            st.session_state.find_session = False
+                                            st.session_state.session_name = sess["name"]
+                                            st.rerun()
+                                        else:
+                                            st.toast(
+                                                (
+                                                    resp["msg"]
+                                                    if "msg" in resp
+                                                    else resp["detail"]
+                                                ),
+                                                duration=7,
+                                            )
+                                    except Exception as e:
+                                        st.toast("Unable to load the session.")
+                                        logging.error(
+                                            f"Failed to load session with id -> {sess["id"]}, err -> {e}"
+                                        )
+
+                            with col2:
+                                st.write(sess[1])
+
+                    case 404:
+                        st.info(
+                            "Similar sessions not found... try with a lower threshold."
+                        )
+                    case _:
+                        resp = similar_req.json()
+                        st.toast(resp["msg"] if "msg" in resp else resp["detail"])
             except Exception as e:
                 logging.error(f"Failed to complete request to the server -> {e}")
                 st.error("Failed to find similar sessions... server error")
