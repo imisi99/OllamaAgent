@@ -1,9 +1,9 @@
 import json
 import logging
 import ollama
+import random
 import zoneinfo
 
-from tavily import TavilyClient
 from datetime import datetime
 from typing import Annotated, Any
 from langchain.tools import InjectedState, tool
@@ -116,7 +116,7 @@ def remove_insight_about_user(
 
 
 @tool(parse_docstring=True)
-def web_search(query: str, max_results: int = 5) -> list[dict] | str:
+def web_search(query: str, max_results: int = 5) -> dict | str:
     """
     This makes a web search using the query and max results (The max results is 10 it defaults to 5)
 
@@ -127,23 +127,43 @@ def web_search(query: str, max_results: int = 5) -> list[dict] | str:
 
     def ollama_search(query: str, max_results: int = 5):
         response = ollama.web_search(query, max_results)
+        result = {}
         for search in response.results:
             search.content
+        return result
 
-    def tavily_search(query: str, max_results: int = 5):
-        response = get_tavily().search(query, max_results=max_results)
+    def tavily_search(query: str, max_results: int = 5) -> dict:
+        response = get_tavily().search(
+            query, max_results=max_results, include_answer=True
+        )
+
+        result = {}
+        result["ai_generted_answer"] = response.get("answer", "")
+        result["results"] = []
+        for search in result.get("results", []):
+            result["results"].append(
+                {
+                    "url": search.get("url", ""),
+                    "title": search.get("title", ""),
+                    "score": search.get("score", 0.0),
+                    "content": search.get("content", ""),
+                }
+            )
+
+        return result
 
     rand = random.randint(0, 1)
 
     try:
         if rand == 0:
-            ollama_search(query, max_results)
+            return ollama_search(query, max_results)
         else:
-            tavily_search(query, max_results)
+            return tavily_search(query, max_results)
     except Exception as e:
-        pass
-
-    return []
+        logging.warn(
+            f"Unable to search the web.. The user is most likely offline try again later err -> {e}"
+        )
+        return f"Unable to search the web.. The user is most likely offline try again later err -> {e}"
 
 
 @tool(parse_docstring=True)
