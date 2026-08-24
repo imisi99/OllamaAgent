@@ -9,3 +9,5 @@ pymongo
 qdrant-client
 redis
 uvicorn
+tavily
+ollama

@@ -6,7 +6,7 @@ from langchain_ollama import ChatOllama, OllamaEmbeddings
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from faster_whisper import download_model
-from core import audio
+from core import audio, web_tools
 from core.audio import create_audio_model
 from core.tools import tools
 from core.prompt import system_prompt
@@ -21,15 +21,11 @@ from api.audio import audio_router
 logging.basicConfig(level=logging.INFO)
 
 
-# TODO:
-# A clickable icon that can open the site (and also startup the app itself a scipt ?).
-# Create and use a different model for the qdrant and redis
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan for app"""
     try:
+        web_tools.TAVILY_CLIENT = web_tools.create_tavily(os.getenv("TAVILY_KEY", ""))
         qdrant.QDRANT_CLIENT = qdrant.connect_qdrant()
         qdrant.ensure_collections()
         mongo.MONGO_CLIENT = mongo.connect_mongo()

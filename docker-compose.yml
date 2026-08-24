@@ -160,7 +160,7 @@ services:
       - agent-shared-network
 networks:
   agent-shared-network:
-    external: true
+    driver: bridge
 
 volumes:
   qdrant:

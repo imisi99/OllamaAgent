@@ -1,8 +1,9 @@
 import json
 import logging
+import ollama
 import zoneinfo
 
-# from tavily import TavilyClient
+from tavily import TavilyClient
 from datetime import datetime
 from typing import Annotated, Any
 from langchain.tools import InjectedState, tool
@@ -11,6 +12,7 @@ import requests
 
 
 from core.agent import get_model
+from core.web_tools import get_tavily
 from db.mongo import get_mongo_database
 from db.qdrant import get_qdrant_database
 from schemas.agent import SessAgentState
@@ -123,26 +125,24 @@ def web_search(query: str, max_results: int = 5) -> list[dict] | str:
         max_results: The maximum number of contents to return from the web search
     """
 
-    # def ollama_search(query: str, max_results: int = 5):
-    #     response = ollama.web_search(query, max_results)
-    #     response.results
-    #
-    # def tavily_search(query: str, max_results: int = 5):
-    #     tavily_client = TavilyClient(api_key="")
-    #     response = tavily_client.search(
-    #         query,
-    #     )
-    #
-    # rand = random.randint(0, 1)
-    #
-    # try:
-    #     if rand == 0:
-    #         ollama_search(query, max_results)
-    #     else:
-    #         tavily_search(query, max_results)
-    # except Exception as e:
-    #     pass
-    #
+    def ollama_search(query: str, max_results: int = 5):
+        response = ollama.web_search(query, max_results)
+        for search in response.results:
+            search.content
+
+    def tavily_search(query: str, max_results: int = 5):
+        response = get_tavily().search(query, max_results=max_results)
+
+    rand = random.randint(0, 1)
+
+    try:
+        if rand == 0:
+            ollama_search(query, max_results)
+        else:
+            tavily_search(query, max_results)
+    except Exception as e:
+        pass
+
     return []
 
 
