@@ -113,6 +113,8 @@ services:
       - MONGO_PORT=${MONGO_PORT}
       - MONGO_PASSWORD=${MONGO_PASSWORD}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL}
+      - OLLAMA_API_KEY=${OLLAMA_API_KEY}
+      - TAVILY_KEY=${TAVILY_KEY}
     depends_on:
       mongo:
         condition: service_healthy

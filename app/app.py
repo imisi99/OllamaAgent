@@ -42,7 +42,7 @@ logging.basicConfig(level=logging.INFO)
 
 float_init()
 
-API_URL = "http://localhost:8000"
+API_URL = "http://server:8000"
 TEXT_EXTS = {
     ".py",
     ".txt",

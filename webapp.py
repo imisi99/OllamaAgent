@@ -3,10 +3,11 @@ import subprocess
 
 
 def closed():
-    subprocess.run(
-        ["docker", "compose", "down"],
-        cwd="/home/knightmares/Documents/project/OllamaAgent",
-    )
+    # subprocess.run(
+    #     ["docker", "compose", "down"],
+    #     cwd="/home/knightmares/Documents/project/OllamaAgent",
+    # )
+    pass
 
 
 window = webview.create_window(

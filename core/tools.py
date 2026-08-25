@@ -128,14 +128,20 @@ def web_search(query: str, max_results: int = 5) -> dict | str:
     def ollama_search(query: str, max_results: int = 5):
         response = ollama.web_search(query, max_results)
         result = {}
+        result["results"] = []
         for search in response.results:
-            search.content
+            result["results"].append(
+                {"url": search.url, "title": search.title, "content": search.content}
+            )
         return result
 
     def tavily_search(query: str, max_results: int = 5) -> dict:
         response = get_tavily().search(
             query, max_results=max_results, include_answer=True
         )
+
+        if "detail" in response:
+            return {"error": response["detail"]["error"]}
 
         result = {}
         result["ai_generted_answer"] = response.get("answer", "")
@@ -152,17 +158,29 @@ def web_search(query: str, max_results: int = 5) -> dict | str:
 
         return result
 
-    rand = random.randint(0, 1)
+    result = {}
+    try:
+        result = tavily_search(query, max_results)
+        if "error" in result:
+            raise Exception(f"An error occured -> {result["error"]}")
+        return result
+    except Exception as e:
+        logging.error(e)
 
     try:
-        if rand == 0:
-            return ollama_search(query, max_results)
+        result = ollama_search(query, max_results)
+        return result
+    except ollama.ResponseError as e:
+        if e.status_code == 402:
+            return f"The user has run out of credit -> {e.error}"
+        elif e.status_code == 429:
+            return f"The user has been rate limited try again later! -> {e.error}"
         else:
-            return tavily_search(query, max_results)
+            return f"Unexpected error -> {e.error}"
+
+    except ConnectionError as e:
+        return f"Couldn't reach the servers the user is likely offline -> {e}"
     except Exception as e:
-        logging.warn(
-            f"Unable to search the web.. The user is most likely offline try again later err -> {e}"
-        )
         return f"Unable to search the web.. The user is most likely offline try again later err -> {e}"
 
 
@@ -175,27 +193,43 @@ def web_fetch(url: str) -> dict | str:
         url: The url to fetch the page content
     """
 
-    # def ollama_fetch(url: str):
-    #     response = ollama.web_fetch(url)
-    #     return {
-    #         "title": response.title,
-    #         "content": response.content,
-    #         "links_found_on_page": response.links,
-    #     }
-    #
-    # try:
-    #     return ollama_fetch(url)
-    # except Exception as e:
-    #     pass
-    #
-    # def tavily_fetch(url: str):
-    #     tavily_client = TavilyClient(api_key="")
-    #     response = tavily_client.extract(url)
-    #
-    # try:
-    # except e
+    def tavily_fetch(url: str) -> dict:
+        response = get_tavily().extract([url])
+        if len(response.get("failed_results", [])) == 1:
+            raise Exception(
+                f"Failed tavily web fetch for -> {url}, err -> {response["failed_results"][0]["error"]}"
+            )
+        return {"url": url, "content": response["results"][0]["raw_content"]}
 
-    return ""
+    def ollama_fetch(url: str):
+        response = ollama.web_fetch(url)
+        return {
+            "title": response.title,
+            "content": response.content,
+            "links_found_on_page": response.links,
+        }
+
+    try:
+        result = tavily_fetch(url)
+        return result
+    except Exception as e:
+        logging.error(e)
+
+    try:
+        result = ollama_fetch(url)
+        return result
+    except ollama.ResponseError as e:
+        if e.status_code == 402:
+            return f"The user has run out of credit -> {e.error}"
+        elif e.status_code == 429:
+            return f"The user has been rate limited try again later! -> {e.error}"
+        else:
+            return f"Unexpected error -> {e.error}"
+
+    except ConnectionError as e:
+        return f"Couldn't reach the servers the user is likely offline -> {e}"
+    except Exception as e:
+        return f"Unable to search the web.. The user is most likely offline try again later err -> {e}"
 
 
 @tool(parse_docstring=True)
