@@ -23,7 +23,12 @@ class QChunk(BaseModel):
     page: Any
 
 
+class RelatedSess(BaseModel):
+    session: QSession
+    score: float
+
+
 class Similar(BaseModel):
     err: CustomError | None = None
-    sessions: dict[QSession, float] = {}
+    sessions: dict[str, RelatedSess] = {}
     score: float = 0

@@ -294,7 +294,10 @@ async def fetch_similar_sessions(
 
         return JSONResponse(
             status_code=status.HTTP_200_OK,
-            content={"score": result.score, "sessions": result.sessions},
+            content={
+                "score": result.score,
+                "sessions": {k: v.model_dump() for k, v in result.sessions.items()},
+            },
         )
 
     except Exception as e:

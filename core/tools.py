@@ -1,7 +1,6 @@
 import json
 import logging
 import ollama
-import random
 import zoneinfo
 
 from datetime import datetime

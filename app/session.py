@@ -120,29 +120,33 @@ def find_similar_sess():
                         )
 
                         col1, col2 = st.columns([4, 1], vertical_alignment="center")
-                        for sess, score in sessions.items():
+                        for id, sess in sessions.items():
                             with col1:
-                                if st.button(sess["name"]):
+                                if st.button(sess["session"]["name"]):
                                     try:
                                         message_req = requests.get(
-                                            url=f"{API_URL}/session/" + sess["id"],
+                                            url=f"{API_URL}/session/" + id
                                         )
 
                                         resp = message_req.json()
 
                                         if message_req.status_code == 200:
-                                            st.session_state.session_id = sess["id"]
-                                            st.session_state.session_uid = sess["uuid"]
+                                            st.session_state.session_id = id
+                                            st.session_state.session_uid = sess[
+                                                "session"
+                                            ]["uuid"]
                                             st.session_state.session_pid = sess[
-                                                "project_id"
-                                            ]
+                                                "session"
+                                            ]["project_id"]
                                             st.session_state.ghost_session = False
                                             st.session_state.show_header = False
                                             st.session_state.messages = resp["session"][
                                                 "messages"
                                             ]
                                             st.session_state.find_session = False
-                                            st.session_state.session_name = sess["name"]
+                                            st.session_state.session_name = sess[
+                                                "session"
+                                            ]["name"]
                                             st.rerun()
                                         else:
                                             st.toast(
@@ -160,7 +164,7 @@ def find_similar_sess():
                                         )
 
                             with col2:
-                                st.write(sess[1])
+                                st.write(sess["score"])
 
                     case 404:
                         st.info(
@@ -193,7 +197,7 @@ def add_a_session_to_project():
                 match projects_req.status_code:
                     case 404:
                         if st.button(
-                            "Create Project", icon="material:add/", type="tertiary"
+                            "Create Project", icon=":material/add:", type="tertiary"
                         ):
                             st.session_state.active_dialog = "create_project"
                             st.rerun()

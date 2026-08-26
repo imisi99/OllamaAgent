@@ -182,6 +182,8 @@ def create_project():
                         case 201:
                             st.toast("project created successfully")
                             st.session_state.project_id = project_req.json()["id"]
+                            st.session_state.project_name = name
+                            st.session_state.project_goal = goal
                             st.session_state.update_project_view = True
                             st.session_state.active_dialog = "view_project"
                             time.sleep(0.8)

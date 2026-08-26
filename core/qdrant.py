@@ -14,7 +14,7 @@ from qdrant_client.http.models import UpdateStatus
 
 from core.conf import CustomError
 from core.emb import EmbeddingModel
-from schemas.qdrant import QChunk, QSession, Similar, QMessage
+from schemas.qdrant import QChunk, QSession, RelatedSess, Similar, QMessage
 
 
 class Job(str, Enum):
@@ -138,11 +138,12 @@ class Qdrant:
         if len(result.points) == 0:
             return Similar()
 
-        sessions: dict[QSession, float] = {}
+        sessions: dict[str, RelatedSess] = {}
         score = 0
         for point in result.points:
             if point.payload:
-                sessions[QSession.model_validate(point.payload)] = point.score
+                session = QSession.model_validate(point.payload)
+                sessions[session.id] = RelatedSess(session=session, score=point.score)
                 score += point.score
 
         score /= len(result.points)
@@ -175,7 +176,7 @@ class Qdrant:
                     id=uid,
                     vector={"messages": vector},
                     payload={
-                        "_id": session.id,
+                        "id": session.id,
                         "uuid": session.uuid,
                         "name": session.name,
                         "messages": session.messages,
