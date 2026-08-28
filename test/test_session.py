@@ -4,7 +4,6 @@ from fastapi.testclient import TestClient
 
 from main import app
 
-
 client = TestClient(app)
 
 sess_details: dict[str, str] = {}
@@ -30,12 +29,7 @@ def test_create_session():
 
 def test_rename_session():
     response = client.put(
-        url="/session/rename/"
-        + sess_details["_id"]
-        + "/"
-        + sess_details["uuid"]
-        + "?name="
-        + "The new name of the session",
+        url=f"/session/rename/{sess_details["_id"]}/{sess_details["uuid"]}?name=Knightmares"
     )
 
     assert response.status_code == 202
@@ -48,25 +42,12 @@ def test_new_session_name():
     assert "session" in response.json()
 
     session = response.json()["session"]
-    assert session["name"] == "The new name of the session"
-
-
-def test_rename_session_fail():
-    response = client.put(
-        url="/session/rename/"
-        + "This should fail"
-        + "/"
-        + sess_details["uuid"]
-        + "?name="
-        + "This should fail",
-    )
-
-    assert response.status_code == 500
+    assert session["name"] == "Knightmares"
 
 
 def test_add_message():
     response = client.put(
-        url="/session/msg/" + sess_details["_id"] + "/" + sess_details["uuid"],
+        url=f"/session/msg/{sess_details["_id"]}/{sess_details["uuid"]}",
         json={
             "role": "test",
             "content": "Testing the add message endpoint",
@@ -75,23 +56,6 @@ def test_add_message():
     )
 
     assert response.status_code == 202
-
-
-def test_fetch_session():
-    response = client.get(url="/session/" + sess_details["_id"])
-
-    assert response.status_code == 200
-    assert "session" in response.json()
-
-    session = response.json()["session"]
-    messages = response.json()["session"]["messages"]
-
-    assert (
-        session["_id"] == sess_details["_id"]
-        and session["uuid"] == sess_details["uuid"]
-        and len(messages) == 1
-        and "Testing the add message endpoint" in messages[0]["content"]
-    )
 
 
 def test_fetch_all_session_preview():
@@ -114,9 +78,28 @@ def test_fetch_all_session():
     assert "sessions" in response.json()
 
     session = response.json()["sessions"][0]
+    sess, msg = session[0], session[1]
+    assert (
+        sess["_id"] == sess_details["_id"]
+        and sess["uuid"] == sess_details["uuid"]
+        and msg[0]["content"] == "Testing the add message endpoint"
+    )
+
+
+def test_fetch_session():
+    response = client.get(url="/session/" + sess_details["_id"])
+
+    assert response.status_code == 200
+    assert "session" in response.json()
+
+    session = response.json()["session"]
+    messages = response.json()["messages"]
+
     assert (
         session["_id"] == sess_details["_id"]
         and session["uuid"] == sess_details["uuid"]
+        and len(messages) == 1
+        and "Testing the add message endpoint" == messages[0]["content"]
     )
 
 

@@ -174,7 +174,7 @@ class LoadingScreen(QWidget):
 
         symbol = names.get(status, "○")
 
-        label.setText(f"{symbol} {label.text().split(" ", 1)[1]} -- {status}")
+        label.setText(f"{symbol} {label.text().split(" ", 1)[1]} --> {status}")
 
 
 class MainWindow(QMainWindow):
