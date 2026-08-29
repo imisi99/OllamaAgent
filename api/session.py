@@ -19,9 +19,6 @@ from schemas.session import (
 
 session = APIRouter()
 
-# DONE: Deleting sessions have to cascade to messages also
-# Making a message is also trigerring the summarizer from where ?
-
 
 @session.post("/session/create")
 def create_session(
@@ -308,7 +305,9 @@ async def fetch_similar_sessions(
         )
 
 
-@session.delete("/session/delete/{session_id}/{session_uid}")
+@session.delete(
+    "/session/delete/{session_id}/{session_uid}", status_code=status.HTTP_204_NO_CONTENT
+)
 def delete_session(
     session_id: str,
     session_uid: str,
@@ -322,10 +321,7 @@ def delete_session(
 
         qdb.add_job(Task(uid=session_uid, job=Job.DELETE_POINT))
 
-        return JSONResponse(
-            status_code=status.HTTP_200_OK, content={"msg": "Session deleted."}
-        )
-
+        return None
     except Exception as e:
         logging.error(f"Failed to delete session with id -> {session_id}, error -> {e}")
         return JSONResponse(

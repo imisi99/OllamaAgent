@@ -333,7 +333,7 @@ def remove_session_from_project():
             if st.button("remove", type="primary"):
                 with st.spinner():
                     try:
-                        project_req = requests.delete(
+                        project_req = requests.put(
                             url=f"{API_URL}/project/remove/{st.session_state.project_id}",
                             json={"ids": ids},
                         )

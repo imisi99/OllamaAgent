@@ -20,11 +20,6 @@ from api.audio import audio_router
 
 logging.basicConfig(level=logging.INFO)
 
-# TODO:
-# Can't copy content from the app
-# The app doens't resize
-# Is there a way to default to dark setting and set to auto rerun from launching of streamlit and also hiding the deploy button (like run it in prod mode or something)?
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

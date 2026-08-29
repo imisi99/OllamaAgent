@@ -62,7 +62,7 @@ def delete_sess():
                         + st.session_state.session_uid,
                     )
 
-                    if delete_req.status_code == 200:
+                    if delete_req.status_code == 204:
                         st.toast("Session deleted successfully")
                         st.session_state.update_view = True
                         remove_active_session_from_sessions()
@@ -342,7 +342,7 @@ def remove_session():
         if st.button("remove", type="primary"):
             with st.spinner():
                 try:
-                    project_req = requests.delete(
+                    project_req = requests.put(
                         url=f"{API_URL}/project/remove/{st.session_state.session_pid}",
                         json={"ids": [st.session_state.session_id]},
                     )

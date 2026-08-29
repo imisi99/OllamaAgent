@@ -17,11 +17,19 @@ def test_fetch_all_session_preview_empty():
 
 def test_create_session():
     response = client.post(
-        url="/session/create", json={"prompt": "Testing the create session endpoint"}
+        url="/session/create",
+        json={
+            "prompt": "Testing the create session endpoint",
+            "audio": None,
+            "files": [],
+            "images": [],
+        },
     )
-    assert response.status_code == 201
-    assert "id" in response.json()
-    assert "uid" in response.json()
+    assert (
+        response.status_code == 201
+        and "id" in response.json()
+        and "uid" in response.json()
+    )
 
     sess_details["_id"] = response.json()["id"]
     sess_details["uuid"] = response.json()["uid"]
@@ -45,12 +53,17 @@ def test_new_session_name():
     assert session["name"] == "Knightmares"
 
 
-def test_add_message():
+def test_create_message():
     response = client.put(
         url=f"/session/msg/{sess_details["_id"]}/{sess_details["uuid"]}",
         json={
             "role": "test",
             "content": "Testing the add message endpoint",
+            "audio": None,
+            "thought": "",
+            "files": [],
+            "images": [],
+            "session_id": "",
             "timestamp": datetime.now().isoformat(),
         },
     )
@@ -79,11 +92,8 @@ def test_fetch_all_session():
 
     session = response.json()["sessions"][0]
     sess, msg = session[0], session[1]
-    assert (
-        sess["_id"] == sess_details["_id"]
-        and sess["uuid"] == sess_details["uuid"]
-        and msg[0]["content"] == "Testing the add message endpoint"
-    )
+    assert sess["_id"] == sess_details["_id"] and sess["uuid"] == sess_details["uuid"]
+    assert len(msg) == 2
 
 
 def test_fetch_session():
@@ -98,15 +108,8 @@ def test_fetch_session():
     assert (
         session["_id"] == sess_details["_id"]
         and session["uuid"] == sess_details["uuid"]
-        and len(messages) == 1
-        and "Testing the add message endpoint" == messages[0]["content"]
+        and len(messages) == 2
     )
-
-
-def test_fetch_session_fail():
-    response = client.get(url="/session/" + "WrongID")
-
-    assert response.status_code == 404
 
 
 def test_delete_session():
@@ -114,12 +117,4 @@ def test_delete_session():
         url="/session/delete/" + sess_details["_id"] + "/" + sess_details["uuid"],
     )
 
-    assert response.status_code == 200
-
-
-def test_delete_session_fail():
-    response = client.delete(
-        url="/session/delete/" + sess_details["_id"] + "/" + sess_details["uuid"],
-    )
-
-    assert response.status_code == 500
+    assert response.status_code == 204

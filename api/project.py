@@ -151,7 +151,7 @@ def add_to_project(
         )
 
 
-@project.delete("/project/remove/{project_id}")
+@project.put("/project/remove/{project_id}")
 def remove_from_project(
     session: UpdateProjectSession,
     project_id: str,

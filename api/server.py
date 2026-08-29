@@ -34,6 +34,7 @@ async def chat_agent(input: SessionConversation, model: Model = Depends(get_mode
         }
     )
     response = await model.chat(session)
+    logging.info(response)
 
     return JSONResponse(status_code=200, content={"msg": response["response"]})
 
