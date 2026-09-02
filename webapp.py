@@ -1,3 +1,4 @@
+import json
 import logging
 import time
 import subprocess
@@ -33,11 +34,11 @@ class DockerWorker(QThread):
         try:
             self.message.emit("Starting Docker containers...")
 
-            subprocess.run(
+            process = subprocess.Popen(
                 ["docker", "compose", "up", "-d"],
                 cwd=PROJECT_DIR,
-                check=True,
-                stdout=subprocess.DEVNULL,
+                text=True,
+                stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
             )
 
@@ -62,7 +63,13 @@ class DockerWorker(QThread):
                     )
                     return
 
-                progress = min(int((elapsed / MAX_WAIT) * 100), 99)
+                if process.poll() is not None and process.returncode != 0:
+                    output = process.stdout.read() if process.stdout else ""
+                    self.failed.emit(f"Docker failed to start:\n{output}")
+                    return
+
+                healthy_count = sum(1 for s in statuses.values() if s == "healthy")
+                progress = min(int((healthy_count / len(statuses)) * 100), 99)
 
                 self.progress.emit(progress)
 
@@ -87,30 +94,33 @@ class DockerWorker(QThread):
             "agent_app": "app",
         }
 
-        result = {}
+        result = {name: "starting" for name in containers}
 
-        for container, service in containers.items():
-            try:
-                output = subprocess.check_output(
-                    [
-                        "docker",
-                        "inspect",
-                        "-f",
-                        "{{if .State.Health}}",
-                        "{{.State.Health.Status}}",
-                        "{{else}}",
-                        "{{.State.Status}}",
-                        "{{end}}",
-                        container,
-                    ],
-                    text=True,
-                    stderr=subprocess.DEVNULL,
-                )
+        try:
+            output = subprocess.check_output(
+                ["docker", "compose", "ps", "--format", "json"],
+                cwd=PROJECT_DIR,
+                text=True,
+                timeout=10,
+                stderr=subprocess.DEVNULL,
+            )
 
-                result[container] = output.strip()
+            for line in output.strip().splitlines():
+                info = json.loads(line)
+                name = info.get("Name")
+                if name in result:
+                    health = info.get("Health", "")
+                    result[name] = (
+                        health.lower() if health else info.get("State", "starting")
+                    )
 
-            except subprocess.CalledProcessError:
-                result[container] = "starting"
+        except (
+            subprocess.CalledProcessError,
+            FileNotFoundError,
+            json.JSONDecodeError,
+            subprocess.TimeoutExpired,
+        ):
+            pass
 
         return result
 
@@ -120,20 +130,43 @@ class LoadingScreen(QWidget):
         super().__init__()
 
         self.setWindowTitle("OllamaAgent")
-        self.setFixedSize(500, 420)
+        self.setFixedSize(480, 440)
+        self.setStyleSheet("""
+            QWidget {
+                background-color: #12141c;
+                color: #e4e6eb;
+                font-family: -apple-system, "Segoe UI", sans-serif;
+            }
+            QProgressBar {
+                border: none;
+                border-radius: 6px;
+                background-color: #1f2230;
+                height: 10px;
+                text-align: center;
+                color: transparent;
+            }
+            QProgressBar::chunk {
+                border-radius: 6px;
+                background-color: qlineargradient(
+                    x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #2E3192, stop:1 #1BFFFF
+                );
+            }
+        """)
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(36, 32, 36, 32)
+        layout.setSpacing(4)
 
         title = QLabel("OllamaAgent")
-        title.setStyleSheet("""
-            font-size: 28px;
-            font-weight: bold;
-            """)
+        title.setStyleSheet("font-size: 24px; font-weight: 700; color: #ffffff;")
+        layout.addWidget(title)
 
         self.message = QLabel("Starting services...")
-
-        self.progress = QProgressBar()
-        self.progress.setRange(0, 100)
+        self.message.setStyleSheet(
+            "color: #8b8fa3; font-size: 13px; margin-top: 4px; margin-bottom: 20px;"
+        )
+        layout.addWidget(self.message)
 
         self.mongo = QLabel("○ MongoDB")
         self.redis = QLabel("○ Redis")
@@ -141,40 +174,43 @@ class LoadingScreen(QWidget):
         self.server = QLabel("○ Server")
         self.app = QLabel("○ Streamlit")
 
-        layout.addWidget(title)
-        layout.addSpacing(15)
+        for label in (self.mongo, self.redis, self.qdrant, self.server, self.app):
+            label.setStyleSheet("font-size: 13px; padding: 4px 0px;")
+            layout.addWidget(label)
 
-        layout.addWidget(self.message)
-        layout.addSpacing(10)
-
-        layout.addWidget(self.mongo)
-        layout.addWidget(self.redis)
-        layout.addWidget(self.qdrant)
-        layout.addWidget(self.server)
-        layout.addWidget(self.app)
-
-        layout.addSpacing(15)
-        layout.addWidget(self.progress)
-
-    def update_status(self, statuses: dict):
-        self.update_service(self.mongo, statuses.get("agent_mongo", "starting"))
-        self.update_service(self.redis, statuses.get("agent_redis", "starting"))
-        self.update_service(self.qdrant, statuses.get("agent_qdrant", "starting"))
-        self.update_service(self.server, statuses.get("agent_server", "starting"))
-        self.update_service(self.app, statuses.get("agent_app", "starting"))
-
-    @staticmethod
-    def update_service(label: QLabel, status: str):
-        names = {
-            "healthy": "✓",
-            "unhealthy": "✗",
-            "starting": "○",
-            "running": "○",
+        self.service_labels = {
+            "agent_mongo": (self.mongo, "MongoDB"),
+            "agent_redis": (self.redis, "Redis"),
+            "agent_qdrant": (self.qdrant, "Qdrant"),
+            "agent_server": (self.server, "Server"),
+            "agent_app": (self.app, "Streamlit"),
         }
 
-        symbol = names.get(status, "○")
+        for label, name in self.service_labels.values():
+            label.setText(f"○ {name}")
 
-        label.setText(f"{symbol} {label.text().split(" ", 1)[1]} --> {status}")
+        layout.addSpacing(16)
+        self.progress = QProgressBar()
+        self.progress.setRange(0, 100)
+        self.progress.setTextVisible(False)
+        layout.addWidget(self.progress)
+
+    def update_status(self, status: dict):
+        for container, (label, name) in self.service_labels.items():
+            self.update_service(label, name, status.get(container, "starting"))
+
+    @staticmethod
+    def update_service(label: QLabel, name: str, status: str):
+        styles = {
+            "healthy": ("✓", "#4ade80"),
+            "unhealthy": ("✗", "#f87171"),
+            "starting": ("○", "#8b8fa3"),
+            "running": ("○", "f5c451"),
+        }
+
+        symbol, color = styles.get(status, ("○", "#8b8fa3"))
+        label.setStyleSheet(f"font-size: 14px; padding: 4px 0px; color: {color};")
+        label.setText(f"{symbol}  {name}")
 
 
 class MainWindow(QMainWindow):
@@ -229,9 +265,7 @@ class MainWindow(QMainWindow):
 
         if answer == QMessageBox.Yes:
             try:
-                subprocess.run(
-                    ["docker", "compose", "down"], cwd=PROJECT_DIR, check=True
-                )
+                subprocess.Popen(["docker", "compose", "down"], cwd=PROJECT_DIR)
 
             except subprocess.CalledProcessError:
                 QMessageBox.warning(self, "Docker", "Failed to stop Docker containers.")
@@ -245,6 +279,7 @@ class MainWindow(QMainWindow):
 def startapp():
 
     app = QApplication(sys.argv)
+    app.setDesktopFileName("ollamaagent")
 
     loading = LoadingScreen()
     loading.show()

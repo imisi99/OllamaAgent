@@ -36,6 +36,7 @@ from streamlit.runtime.uploaded_file_manager import UploadedFile
 # Add the audio functionality use a STT
 # Add the audio implementatoin
 
+st.set_page_config(layout="centered")
 
 warnings.filterwarnings("ignore", message=".*st.components.v1.html.*")
 logging.basicConfig(level=logging.INFO)
@@ -62,50 +63,57 @@ TEXT_EXTS = {
 
 
 def user_bubble(content: str, images: list, files: list, audio: dict | None):
-    with st.container(border=True, autoscroll=True):
-        if images:
-            cols = st.columns(min(len(images), 2))
-            for idx, img in enumerate(images):
-                with cols[idx % 2]:
-                    try:
-                        img_bytes = base64.b64decode(img["image"])
-                        st.image(
-                            img_bytes,
-                            use_container_width=True,
-                            output_format="auto",
-                            caption=img["name"],
-                        )
-                    except Exception as e:
-                        logging.info(f"Failed to render image err -> {e}")
-                        st.caption("Failed to render image.")
+    with st.container(
+        horizontal=True,
+        horizontal_alignment="right",
+    ):
 
-        if files:
-            for f in files:
-                ext = Path(f["name"]).suffix.lower()
-                with st.expander(f"{f['name']}", expanded=False, icon="spinner"):
-                    if ext in TEXT_EXTS:
+        with st.container(border=True, autoscroll=True, width="content"):
+            if images:
+                cols = st.columns(min(len(images), 2))
+                for idx, img in enumerate(images):
+                    with cols[idx % 2]:
                         try:
-                            text = base64.b64decode(f["file"]).decode(
-                                "utf-8", errors="replace"
+                            img_bytes = base64.b64decode(img["image"])
+                            st.image(
+                                img_bytes,
+                                use_container_width=True,
+                                output_format="auto",
+                                caption=img["name"],
                             )
-                            lang = ext.strip(".")
-                            st.code(text, language=lang, line_numbers=True, height=300)
                         except Exception as e:
-                            logging.info(f"Failed to render file err -> {e}")
-                            st.caption("Error decoding file content.")
-                    elif ext.strip(".") == "pdf":
-                        st.pdf(base64.b64decode(f["file"]))
-                    else:
-                        st.caption("No preview available for this file type.")
+                            logging.info(f"Failed to render image err -> {e}")
+                            st.caption("Failed to render image.")
 
-        if audio:
-            try:
-                audio_bytes = base64.b64decode(audio["audio"])
-                st.audio(audio_bytes, format=audio["mime"])
-            except Exception as e:
-                logging.info(f"Failed to play audio err -> {e}")
-                st.caption("Failed to playback audio.")
-        st.text(content)
+            if files:
+                for f in files:
+                    ext = Path(f["name"]).suffix.lower()
+                    with st.expander(f"{f['name']}", expanded=False, icon="spinner"):
+                        if ext in TEXT_EXTS:
+                            try:
+                                text = base64.b64decode(f["file"]).decode(
+                                    "utf-8", errors="replace"
+                                )
+                                lang = ext.strip(".")
+                                st.code(
+                                    text, language=lang, line_numbers=True, height=300
+                                )
+                            except Exception as e:
+                                logging.info(f"Failed to render file err -> {e}")
+                                st.caption("Error decoding file content.")
+                        elif ext.strip(".") == "pdf":
+                            st.pdf(base64.b64decode(f["file"]))
+                        else:
+                            st.caption("No preview available for this file type.")
+
+            if audio:
+                try:
+                    audio_bytes = base64.b64decode(audio["audio"])
+                    st.audio(audio_bytes, format=audio["mime"])
+                except Exception as e:
+                    logging.info(f"Failed to play audio err -> {e}")
+                    st.caption("Failed to playback audio.")
+            st.text(content)
 
 
 def header():
@@ -223,7 +231,7 @@ def display_session_actions():
                     st.rerun()
 
         session_actions.float(
-            "top: 60px; left: 35%; right: 0; width: 35%; max-height: 220px; overflow-y: auto; "
+            "top: 60px; left: 25%; right: 0; width: 50%; max-height: 220px; overflow-y: auto; "
             "background-color: rgba(38, 39, 48, 0.75); backdrop-filter: blur(8px); "
             "-webkit-backdrop-filter: blur(8px); z-index: 9999;"
         )
