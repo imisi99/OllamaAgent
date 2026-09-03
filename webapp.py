@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 from PySide6.QtWebEngineWidgets import QWebEngineView
+from PySide6.QtWebEngineCore import QWebEngineSettings
 from PySide6.QtGui import QKeySequence, QShortcut
 
 PROJECT_DIR = "/home/knightmares/Documents/project/OllamaAgent"
@@ -221,6 +222,10 @@ class MainWindow(QMainWindow):
         self.resize(1200, 800)
 
         self.browser = QWebEngineView()
+
+        self.browser.settings().setAttribute(
+            QWebEngineSettings.WebAttribute.JavascriptCanAccessClipboard, True
+        )
 
         self.browser.setZoomFactor(0.8)
 

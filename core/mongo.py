@@ -81,6 +81,14 @@ class Database:
         if not result.acknowledged:
             return CustomError(message="Failed to create message.", code=500)
 
+        update = self.session_collection.update_one(
+            {"_id": message["session_id"]},
+            {"$set": {"last_edited": message["timestamp"]}},
+        )
+
+        if update.modified_count == 0:
+            return CustomError(message="Failed to update session.", code=500)
+
     def create_session(self, session: Session) -> tuple[CustomError | None, str]:
         session["created_at"] = self.normalize_timestamp(session["created_at"])
         session["last_edited"] = self.normalize_timestamp(session["last_edited"])
@@ -139,16 +147,18 @@ class Database:
                 "_id": False,
                 "thought": False,
                 "files": False,
+                "images": False,
                 "timestamp": False,
+                "audio": False,
             },
         ) as cursor:
             messages = list(cursor)
 
         for msg in messages:
-            self.denormalize_audio(msg["audio"])
-            self.denormalize_image_files(msg["images"], [])
+            msg["audio"] = None
             msg["timestamp"] = ""
             msg["files"] = []
+            msg["images"] = []
             msg["thought"] = ""
 
         messages = cast(list[Message], messages)

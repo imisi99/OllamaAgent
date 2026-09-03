@@ -2,7 +2,6 @@ import base64
 import logging
 import os
 import tempfile
-from datetime import datetime
 from typing import Optional, cast
 from langchain_core.documents import Document
 from langchain_core.messages import (
@@ -31,10 +30,6 @@ from db.redis import get_redis_database
 from schemas.agent import SessAgentState, SessionState
 from schemas.mongo import Audio, File, Message
 from schemas.qdrant import QMessage
-
-# TODO:
-# The prompt length is a factor causing slow response from the agent (reduce it)
-# Fix the retrieval quality of the qdrant file chunks
 
 
 class Model:
@@ -69,7 +64,17 @@ class Model:
     def build_graph(self, agent):
         def update_memory(state: SessionState) -> SessionState:
             get_redis_database().add_short_term_memory(
-                state["session_id"], state["message"]
+                state["session_id"],
+                {
+                    "role": "user",
+                    "thought": "",
+                    "audio": None,
+                    "content": state["message"]["content"],
+                    "timestamp": "",
+                    "images": [],
+                    "session_id": state["session_id"],
+                    "files": [],
+                },
             )
 
             return state
@@ -92,7 +97,7 @@ class Model:
             redDB = get_redis_database()
             msg = redDB.get_short_term_memory(session_id)
             images = []
-            if len(msg) >= 6:
+            if len(msg) >= 4:
                 for m in msg:
                     if len(m["images"]) > 0:
                         images.extend(m["images"])
@@ -108,13 +113,14 @@ class Model:
                         "thought": "",
                         "audio": None,
                         "content": f"SUMMARY OF THE CHAT SO FAR: {summarized}",
-                        "timestamp": datetime.now().isoformat(),
-                        "images": images,
+                        "timestamp": "",
+                        "images": [],
                         "session_id": session_id,
                         "files": [],
                     },
                     True,
                 )
+                redDB.add_summary(summarized, session_id)
             return state
 
         async def run_agent(state: SessionState) -> SessionState:
@@ -123,12 +129,13 @@ class Model:
 
             messages = []
             if chat_history:
-                for msg in chat_history:
+                for idx in range(len(chat_history)):
+                    msg = chat_history[idx]
                     role = msg["role"]
                     if role == "system":
                         messages.append(SystemMessage(content=msg["content"]))
                     elif role == "user":
-                        is_current = msg is chat_history[-1]
+                        is_current = idx == (len(chat_history) - 1)
                         if is_current:
                             if len(msg["images"]) > 0:
                                 content: list[str | dict] = [
@@ -157,34 +164,38 @@ class Model:
                     elif role == "assistant":
                         messages.append(AIMessage(content=msg["content"]))
 
-            messages[-1].content = ""
+            prompt = ""
 
-            prompt = f"""
-            Use the following documents to answer the user question.
-            <document>
-            {state["chunks"]}
-            </document>
-            """
+            if len(state["chunks"]) > 0:
+                prompt += f"""
+                Use the following documents to answer the user question.
+                <document>
+                {state["chunks"]}
+                </document>
+                """
+            if state["message"]["audio"]:
+                prompt += f"""
+                The user said this with audio and this is the transcription.
+                <transcript>
+                {state["message"]["audio"]["transcript"]}
+                </transcript>
+                """
 
-            prompt_with_audio = f"""
-            The user said this with audio and this is the transcription.
-            <transcript>
-            {state["message"]["audio"]["transcript"] if state["message"]["audio"] else ""}
-            </transcript>
-            """
-
-            actual_prompt = f"""
+            prompt += f"""
             User Question:
             {state["message"]["content"]}
             """
 
-            if len(state["chunks"]) > 0:
-                messages[-1].content += prompt
-
-            if state["message"]["audio"]:
-                messages[-1].content += prompt_with_audio
-
-            messages[-1].content += actual_prompt
+            last = messages[-1]
+            if isinstance(last.content, list):
+                for block in last.content:
+                    if isinstance(block, dict) and block.get("type") == "text":
+                        block["text"] = prompt
+                        break
+                else:
+                    last.content.append({"type": "text", "text": prompt})
+            else:
+                last.content = prompt
 
             response = await agent.ainvoke(
                 {
@@ -205,7 +216,7 @@ class Model:
                     "thought": "",
                     "audio": None,
                     "content": response["messages"][-1].content,
-                    "timestamp": datetime.now().isoformat(),
+                    "timestamp": "",
                     "session_id": session_id,
                     "images": [],
                     "files": [],
@@ -297,7 +308,6 @@ class Model:
                         suppressing = False
                     yield {"type": "tool_end", "content": ""}
 
-    #
     def load_document(self, files: list[File]) -> list[Document]:
         loaders = {
             ".pdf": PyPDFLoader,

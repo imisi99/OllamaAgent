@@ -6,8 +6,6 @@ import redis
 
 from schemas.mongo import Message
 
-# TODO: It doesn't load previously existing chat when continuing
-
 
 class Cache:
     def __init__(self, client: redis.Redis, mongoDB: Database) -> None:
@@ -46,7 +44,7 @@ class Cache:
         self.client.rpush(session_id, json.dumps(prev_messages))
 
         expiry = (
-            datetime.now() + timedelta(minutes=5)
+            datetime.now() + timedelta(minutes=10)
             if new_memory
             else datetime.now() + timedelta(minutes=20)
         )
@@ -66,6 +64,12 @@ class Cache:
             else:
                 messages.append(parsed)
         return messages
+
+    def add_summary(self, session_id: str, summary: str):
+        self.client.hset("summary", session_id, summary)
+
+    def get_summary(self, session_id: str):
+        return self.client.hget("summary", session_id)
 
     def clear_short_term_memory(self, session_id: str):
         self.client.delete(session_id)

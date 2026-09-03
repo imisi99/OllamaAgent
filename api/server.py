@@ -16,9 +16,6 @@ from schemas.qdrant import QMessage
 
 serve = APIRouter()
 
-# TODO: The Flow from the chatting to the summarizing of message for the embed cuts of the chatting ? (This happens at somewhat every run ?) This also happens twice ?
-# This stuff doesn't add to the redis when it does the summarizer which is what i'm guessing is causing this stuff to happen like this
-
 
 @serve.post("/agent/chat")
 async def chat_agent(input: SessionConversation, model: Model = Depends(get_model)):

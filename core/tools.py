@@ -263,14 +263,16 @@ async def find_related_sessions(
 
     chats = []
     if summarize_chat:
-        for session in result.sessions:
+        for session in result.sessions.values():
             chats.append(
-                f"{session.name}: \nSUMMARY: \n{await get_model().summarize_messages(session.messages)}"
+                f"{session.session.name}: \nSUMMARY: \n{await get_model().summarize_messages(session.session.messages)}"
             )
     else:
-        for session in result.sessions:
-            msg = "\n".join(f"{msg.role}: {msg.content}" for msg in session.messages)
-            chats.append(f"{session.name}: \n{msg}")
+        for session in result.sessions.values():
+            msg = "\n".join(
+                f"{msg.role}: {msg.content}" for msg in session.session.messages
+            )
+            chats.append(f"{session.session.name}: \n{msg}")
 
     logging.info(f"Retrieval information for session with id {state['session_id']}")
 
@@ -279,7 +281,7 @@ async def find_related_sessions(
     )
 
     logging.info(
-        f"RELEVANCE: \n{'\n'.join(f'ID -> {sess.id}, NAME -> {sess.name}, SCORE -> {score}' for sess, score in result.sessions.items())}"
+        f"RELEVANCE: \n{'\n'.join(f'ID -> {sess.session.id}, NAME -> {sess.session.name}, SCORE -> {sess.score}' for sess in result.sessions.values())}"
     )
 
     if summarize_chat:

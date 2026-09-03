@@ -20,6 +20,11 @@ from api.audio import audio_router
 
 logging.basicConfig(level=logging.INFO)
 
+# TODO:
+# Test The Audio functionality
+# Test the Project functionality
+# Test the File functionality
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -62,7 +67,7 @@ async def lifespan(app: FastAPI):
             keep_alive=15,
         )
 
-        emb.EMB_MODEL = emb.create_emb_model(embed)
+        emb.EMB_MODEL = emb.create_emb_model(embed, redis.REDIS_DATABASE)
         qdrant.QDRANT_DATABASE = qdrant.create_qdrant_database(emb.get_emb_model())
 
         agent.MODEL = agent.create_model(

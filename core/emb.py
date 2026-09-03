@@ -3,23 +3,20 @@ from langchain_ollama import OllamaEmbeddings
 from typing import Optional
 
 
-from core import agent
+from core.cache import Cache
 from schemas.qdrant import QSession
-
-# TODO: Work on the summarizer not calling on every turn after reaching the point for calling
 
 
 class EmbeddingModel:
-    def __init__(self, emb_model: OllamaEmbeddings) -> None:
+    def __init__(self, emb_model: OllamaEmbeddings, cache: Cache) -> None:
         self.EMB_MODEL = emb_model
+        self.cache = cache
 
     async def generate_vector_embedding(self, session: QSession) -> list[float]:
         info = {}
 
-        if len(session.messages) >= 4:
-            info["message"] = await agent.get_model().summarize_messages(
-                session.messages
-            )
+        if len(session.messages) >= 4 == 0:
+            info["message"] = self.cache.get_summary(session.id)
         else:
             info["message"] = [{"msg": msg.content} for msg in session.messages]
 
@@ -36,8 +33,8 @@ class EmbeddingModel:
 EMB_MODEL: Optional[EmbeddingModel] = None
 
 
-def create_emb_model(emb_model: OllamaEmbeddings) -> EmbeddingModel:
-    new_model = EmbeddingModel(emb_model)
+def create_emb_model(emb_model: OllamaEmbeddings, cache: Cache) -> EmbeddingModel:
+    new_model = EmbeddingModel(emb_model, cache)
     return new_model
 
 

@@ -31,11 +31,6 @@ from project import (
 from streamlit_float import float_init
 from streamlit.runtime.uploaded_file_manager import UploadedFile
 
-# TODO:
-# Add a model picker for the app
-# Add the audio functionality use a STT
-# Add the audio implementatoin
-
 st.set_page_config(layout="centered")
 
 warnings.filterwarnings("ignore", message=".*st.components.v1.html.*")
@@ -63,10 +58,7 @@ TEXT_EXTS = {
 
 
 def user_bubble(content: str, images: list, files: list, audio: dict | None):
-    with st.container(
-        horizontal=True,
-        horizontal_alignment="right",
-    ):
+    with st.container(horizontal=True, horizontal_alignment="right"):
 
         with st.container(border=True, autoscroll=True, width="content"):
             if images:
@@ -587,7 +579,7 @@ def chat():
                         },
                         "ghost_session": st.session_state.ghost_session,
                     },
-                    timeout=120,
+                    timeout=300,
                 ) as r:
                     start_time = time.time()
                     for token in r.iter_text():
@@ -615,7 +607,7 @@ def chat():
                             if curr_time - start_time > 60:
                                 thought = "*gathering thoughts...*"
                             if curr_time - start_time > 120:
-                                thought = "*please be patient...*"
+                                thought = "*working on it...*"
 
                             thought_placeholder.markdown(thought)
                             thought_text += chunk["content"]
@@ -633,6 +625,9 @@ def chat():
                 {"role": "assistant", "content": full_response, "thought": full_thought}
             )
 
+        except httpx.TimeoutException:
+            st.error("The connection has timed out")
+            st.stop()
         except Exception as e:
             logging.error(f"Failed to complete request to the server -> {e}")
             st.error(
@@ -652,7 +647,7 @@ def display_session_message():
         else:
             with st.popover("*thought...*", type="tertiary"):
                 st.write(msg["thought"])
-            st.markdown(msg["content"], text_alignment="justify")
+            st.markdown(msg["content"])
 
 
 def open_active_dialog():
